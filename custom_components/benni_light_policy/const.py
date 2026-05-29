@@ -159,7 +159,10 @@ CONF_BATHROOM_TIMEOUT: Final = "bathroom_timeout_seconds"
 # Toolbox-Auto-Prefill: Hub-Foundation-Felder werden mit den bekannten
 # Singleton-Entity-IDs der Benni-Toolbox vorbelegt (falls vorhanden) — der User
 # bestätigt nur, statt zu suchen. Geräte-spezifische Felder (Lux/Wetter/…) bleiben leer.
-TOOLBOX_PREFILL: Final[dict[str, str]] = {
+# Einzelwert-Entities. Werden nur vorbelegt, WENN die Entity in HA existiert →
+# auf anderen Anlagen schadlos (greift einfach nicht). IDs aus der Live-Anlage
+# (einhornzentrale) ermittelt: eindeutige Singletons brauchen kein Raussuchen.
+ENTITY_PREFILL: Final[dict[str, str]] = {
     CONF_BIO_STATE: "sensor.benni_context_bio_state",
     CONF_ACTIVITY_STATE: "sensor.benni_context_activity_state",
     CONF_DAY_STATE: "sensor.benni_core_day_state",
@@ -167,6 +170,35 @@ TOOLBOX_PREFILL: Final[dict[str, str]] = {
     CONF_PRESENCE_HOUSEHOLD: "sensor.benni_context_presence_household",
     CONF_PRESENCE_TRANSITION: "sensor.benni_context_presence_transition",
     CONF_CALENDAR_THEME: "sensor.benni_context_day_context",
+    CONF_LUX: "sensor.garden_illuminance_atomic",
+    CONF_ENTERTAINMENT_STABLE: "binary_sensor.benni_media_context_entertainment_active",
+    CONF_SYSTEM_READY: "binary_sensor.system_benni_context_ready",
+    CONF_SEASON: "sensor.weather_season_meteorological_atomic",
+}
+
+# Lampengruppen sind Mengen von Einzellampen (keine HA-Group-Entity vorhanden).
+GROUP_PREFILL: Final[dict[str, list[str]]] = {
+    CONF_GROUP_MAIN: [
+        "light.living_sideboard_table_lamp",
+        "light.living_sofa_table_lamp",
+        "light.living_cabinet_wall_strip",
+        "light.living_sofa_wall_strip",
+        "light.living_desk_strip_stripe",
+    ],
+    CONF_GROUP_CEILING: ["light.living_ceiling_light_white"],
+    CONF_GROUP_ALL: [
+        "light.living_sideboard_table_lamp",
+        "light.living_sofa_table_lamp",
+        "light.living_cabinet_wall_strip",
+        "light.living_sofa_wall_strip",
+        "light.living_desk_strip_stripe",
+        "light.living_ceiling_light_white",
+    ],
+}
+
+# Subentry-Felder, die sich eindeutig vorbelegen lassen.
+SUBENTRY_PREFILL: Final[dict[str, str]] = {
+    CONF_AWAKE_MINUTES: "sensor.benni_core_user_awake_duration",
 }
 
 # Options.
