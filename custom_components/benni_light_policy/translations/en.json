@@ -1,0 +1,57 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Light Policy",
+        "description": "Quell-Entities (Foundation-Sensoren) und Lampengruppen. day_state ist das wichtigste Gate. Apply ist standardmäßig aus (Shadow-Mode).",
+        "data": {
+          "bio_state_entity": "Bio-State",
+          "day_state_entity": "Day-State (Detailphase)",
+          "activity_state_entity": "Activity-State",
+          "lux_entity": "Außenhelligkeit (Lux)",
+          "presence_personal_entity": "Persönliche Anwesenheit",
+          "presence_household_entity": "Haushaltsanwesenheit",
+          "guest_entity": "Gast-Status (Eltern)",
+          "season_entity": "Jahreszeit",
+          "calendar_theme_entity": "Kalender-Thema",
+          "title_classifier_entity": "Title Classifier",
+          "entertainment_stable_entity": "Entertainment-Stable",
+          "overnight_away_entity": "Übernacht-Auswärts-Signal",
+          "system_ready_entity": "System-Ready",
+          "weather_entity": "Wetter (Icon für R10)",
+          "preset_catalog_entity": "Scene-Presets Katalog-Sensor",
+          "group_main": "Lampengruppe Hauptgruppe",
+          "group_ceiling": "Lampengruppe Deckenlampe (CCT)",
+          "group_all": "Lampengruppe Alle (Hard-Off-Ziel)",
+          "hallway_light": "Flurlicht (R14)",
+          "bathroom_light": "Badlicht (R15)",
+          "bedroom_group": "Schlafzimmer-Gruppe (R16)",
+          "bathroom_vibration_entity": "Klodeckel-Vibrationssensor (R15)",
+          "awake_minutes_entity": "Awake-Dauer in Minuten (R16)",
+          "ring_target_entity": "T1M RGB Ring (Aqara, R17)",
+          "hallway_trigger_entities": "Flur-Trigger: Tür/Bewegung (R14)",
+          "apply_enabled": "Apply aktiviert",
+          "startup_block_seconds": "Startup-Block (Sekunden)",
+          "crossfade_seconds": "Crossfade-Dauer (Sekunden)",
+          "scene_interval_seconds": "Scene-Interval (Sekunden)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Es ist bereits eine Light-Policy-Instanz konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Light Policy — Optionen",
+        "data": {
+          "apply_enabled": "Apply aktiviert",
+          "startup_block_seconds": "Startup-Block (Sekunden)",
+          "crossfade_seconds": "Crossfade-Dauer (Sekunden)",
+          "scene_interval_seconds": "Scene-Interval (Sekunden)"
+        }
+      }
+    }
+  }
+}
