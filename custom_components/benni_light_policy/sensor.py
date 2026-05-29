@@ -171,11 +171,12 @@ class DebugSensor(LightPolicyEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        p = self.coord.last_plan
-        if not p:
-            return {}
-        return {
-            "plan": p.as_dict(),
-            "apply_enabled": self.coord.apply_enabled,
-            "manual_off_active": self.coord.manual_off_active,
+        attrs = {
+            "lux_gate": self.coord.gate_internals(),
+            "ring_mode": self.coord.ring_mode,
+            "bedtime_signal_active": self.coord.bedtime_signal_active,
         }
+        p = self.coord.last_plan
+        if p:
+            attrs["plan"] = p.as_dict()
+        return attrs

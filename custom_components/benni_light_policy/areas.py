@@ -25,7 +25,7 @@ from .const import (
     CONF_HALLWAY_LIGHT,
     CONF_HALLWAY_TRIGGERS,
     CONF_RING_PRESET_MAP,
-    CONF_RING_TARGET,
+    CONF_RING_TARGETS,
     HALLWAY_COLOR_TEMP,
     HALLWAY_OFF_REPEAT_DELAY,
     HALLWAY_OFF_REPEATS,
@@ -218,15 +218,18 @@ class RingController(_AreaBase):
         if new is None:
             return
         self.coord.set_ring_mode(new.state)
-        target = self.opt(CONF_RING_TARGET)
+        targets = self.opt(CONF_RING_TARGETS) or []
+        if isinstance(targets, str):
+            targets = [targets]
         preset_map = self.opt(CONF_RING_PRESET_MAP) or {}
         effect = preset_map.get(new.state)
-        if not (self.apply_enabled and target and effect):
+        if not (self.apply_enabled and targets and effect):
             return
+        # Simultan auf ALLE Ringe (z.B. Wohnzimmer + Küche) denselben Effekt.
         self.hass.async_create_task(
             self.hass.services.async_call(
                 AQARA_DOMAIN, AQARA_SERVICE_SET_EFFECT,
-                {"entity_id": target, "effect": effect}, blocking=False,
+                {"entity_id": list(targets), "effect": effect}, blocking=False,
             )
         )
 

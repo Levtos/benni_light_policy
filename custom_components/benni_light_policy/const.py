@@ -132,7 +132,7 @@ CONF_BATHROOM_LIGHT: Final = "bathroom_light"
 CONF_BATHROOM_VIBRATION: Final = "bathroom_vibration_entity"
 CONF_BEDROOM_GROUP: Final = "bedroom_group"
 CONF_AWAKE_MINUTES: Final = "awake_minutes_entity"
-CONF_RING_TARGET: Final = "ring_target_entity"            # Aqara T1M RGB Ring
+CONF_RING_TARGETS: Final = "ring_target_entities"         # Aqara RGB Ringe (mehrere, simultan)
 CONF_RING_PRESET_MAP: Final = "ring_preset_map"           # dict activity_state -> effect name
 
 # Options.
@@ -234,6 +234,7 @@ UID_APPLY_BLOCKED: Final = "living_room_apply_blocked"
 UID_RING_MODE: Final = "ring_mode"
 UID_BEDTIME_SIGNAL: Final = "bedroom_bedtime_signal"
 UID_MANUAL_OFF: Final = "manual_off_living_room"
+UID_APPLY_ENABLED: Final = "apply_enabled"
 
 # suggested_object_ids — kompatibel zur alten YAML-Welt wo Downstream-Module
 # (z.B. Rollo) auf den Namen zugreifen.
