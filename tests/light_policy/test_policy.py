@@ -162,10 +162,10 @@ def test_presence_sim_ends_on_coming_home():
     assert p.mode != C.MODE_PRESENCE_SIM
 
 
-def test_pc_overwatch():
-    p = _decide(_ctx(activity_state=C.ACTIVITY_FREE_TIME, title_classifier=C.TITLE_OVERWATCH, day_state="early_night"))
-    assert p.mode == C.MODE_PC_OVERWATCH
-    assert p.preset_enum == C.PRESET_PC_OVERWATCH
+def test_gaming_requires_subentry_policy():
+    # Ohne Gaming-Subentry tut der Title-Classifier nichts (gaming nicht mehr im Kern).
+    p = _decide(_ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night"))
+    assert p.mode == "early_night"  # Tagesphase-Fallback, kein gaming
 
 
 def test_cinema_blocked_by_guest():
@@ -229,12 +229,48 @@ def test_registry_priorities_ascending_and_unique():
     assert len(prios) == len(set(prios))
 
 
-def test_registry_kinds_match_decision_chain():
-    # Die typisierte Registry muss die §4.1-Kette abbilden (Reihenfolge = Priorität).
+def test_registry_kinds_are_core_only():
+    # Kern-Policies (ohne gaming/music_party → die kommen per Subentry).
     assert P.POLICY_KINDS == (
         "waking", "idle_sleep", "idle_lux", "private_time", "work_home",
-        "household", "presence_sim", "music_party", "gaming", "cinema", "dayphase",
+        "household", "presence_sim", "cinema", "dayphase",
     )
+
+
+def test_gaming_subentry_policy_wins_over_dayphase():
+    pol = P.make_gaming_policy("ow", {"ow": "games_overwatch_2"})
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night", season=C.SEASON_WINTER),
+        extra_policies=[pol],
+    )
+    assert p.mode == "gaming:ow"
+    assert p.preset_enum == "games_overwatch_2"
+
+
+def test_gaming_subentry_inactive_when_value_unmapped():
+    pol = P.make_gaming_policy("something_else", {"ow": "games_overwatch_2"})
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night", season=C.SEASON_WINTER),
+        extra_policies=[pol],
+    )
+    assert p.mode == "early_night"  # Fallback
+
+
+def test_gaming_subentry_yields_to_higher_priority_core():
+    # work_home (Prio 5) schlägt gaming (Prio 9).
+    pol = P.make_gaming_policy("ow", {"ow": "games_overwatch_2"})
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_WORK_HOME, day_state="early_night"),
+        extra_policies=[pol],
+    )
+    assert p.mode == C.MODE_WORK_HOME
+
+
+def test_music_subentry_requires_birthday():
+    pol = P.make_music_policy("party", frozenset({"party"}), "disco")
+    base = dict(activity_state=C.ACTIVITY_IDLE, day_state="late_evening")
+    assert _decide(_ctx(calendar_theme="geburtstag", **base), extra_policies=[pol]).mode == C.MODE_MUSIC_PARTY
+    assert _decide(_ctx(**base), extra_policies=[pol]).mode != C.MODE_MUSIC_PARTY
 
 
 def test_dayphase_policy_is_terminal():

@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "context": {
-        "title": "1/7 · Kontext (Benni Toolbox)",
-        "description": "Die Kern-Kontext-Sensoren. Day State ist das wichtigste Gate (unbekannt → kein Einschalten).",
+        "title": "1/5 · Kontext (Benni Toolbox)",
+        "description": "Kern-Kontext-Sensoren — aus der Toolbox vorausgefüllt, i.d.R. nur bestätigen. Day State ist das wichtigste Gate.",
         "data": {
           "bio_state_entity": "Bio State",
           "activity_state_entity": "Activity State",
@@ -13,7 +13,7 @@
         }
       },
       "environment": {
-        "title": "2/7 · Umwelt & Medien",
+        "title": "2/5 · Umwelt & Medien",
         "data": {
           "lux_entity": "Außenhelligkeit (Lux)",
           "weather_entity": "Wetter (Icon, R10)",
@@ -23,46 +23,26 @@
         }
       },
       "signals": {
-        "title": "3/7 · Weitere Signale",
+        "title": "3/5 · Weitere Signale",
         "data": {
           "guest_entity": "Gast-Status (Eltern)",
-          "title_classifier_entity": "Title Classifier",
           "presence_transition_entity": "Presence Transition (coming_home, R12)",
           "overnight_away_entity": "Übernacht-Auswärts-Signal",
-          "system_ready_entity": "System-Ready",
-          "awake_minutes_entity": "Awake-Dauer in Minuten (R16)"
+          "system_ready_entity": "System-Ready"
         }
       },
       "lamps": {
-        "title": "4/7 · Lampengruppen",
-        "description": "Die Wohnzimmer-Lampengruppen für den Plan.",
+        "title": "4/5 · Lampengruppen & Katalog",
         "data": {
           "group_main": "Hauptgruppe",
           "group_ceiling": "Deckenlampe (CCT)",
-          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)"
-        }
-      },
-      "areas": {
-        "title": "5/7 · Bereiche",
-        "data": {
-          "hallway_light": "Flurlicht (R14)",
-          "hallway_trigger_entities": "Flur-Trigger: Tür/Bewegung (R14)",
-          "bathroom_light": "Badlicht (R15)",
-          "bathroom_vibration_entity": "Klodeckel-Vibrationssensor (R15)",
-          "bedroom_group": "Schlafzimmer-Gruppe (R16)"
-        }
-      },
-      "ring_presets": {
-        "title": "6/7 · Ring & Scene Presets",
-        "description": "RGB-Ringe können mehrere sein (z.B. Wohnzimmer + Küche) — alle bekommen simultan denselben Status-Effekt.",
-        "data": {
-          "ring_target_entities": "RGB-Ringe (Aqara, mehrere, R17)",
+          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)",
           "preset_catalog_entity": "Scene-Presets Katalog-Sensor (UUID-Lookup)"
         }
       },
       "options": {
-        "title": "7/7 · Optionen",
-        "description": "Apply ist standardmäßig AUS (Shadow-Mode). Erst einschalten, wenn Gruppen + Katalog gesetzt sind.",
+        "title": "5/5 · Optionen",
+        "description": "Apply ist standardmäßig AUS (Shadow). Spezialfälle (Gaming, Musik, Ringe, Flur, Bad, Schlafzimmer) später als Subentries hinzufügen.",
         "data": {
           "apply_enabled": "Apply aktiviert (aus = Shadow)",
           "startup_block_seconds": "Startup-Block (Sekunden)",
@@ -78,14 +58,12 @@
   "options": {
     "step": {
       "init": {
-        "title": "Light Policy — Optionen",
+        "title": "Light Policy — Hub-Optionen",
         "menu_options": {
           "context": "Kontext",
           "environment": "Umwelt & Medien",
           "signals": "Weitere Signale",
-          "lamps": "Lampengruppen",
-          "areas": "Bereiche",
-          "ring_presets": "Ring & Presets",
+          "lamps": "Lampengruppen & Katalog",
           "options": "Optionen (Apply, Crossfade …)"
         }
       },
@@ -113,35 +91,17 @@
         "title": "Weitere Signale",
         "data": {
           "guest_entity": "Gast-Status (Eltern)",
-          "title_classifier_entity": "Title Classifier",
           "presence_transition_entity": "Presence Transition (coming_home, R12)",
           "overnight_away_entity": "Übernacht-Auswärts-Signal",
-          "system_ready_entity": "System-Ready",
-          "awake_minutes_entity": "Awake-Dauer in Minuten (R16)"
+          "system_ready_entity": "System-Ready"
         }
       },
       "lamps": {
-        "title": "Lampengruppen",
+        "title": "Lampengruppen & Katalog",
         "data": {
           "group_main": "Hauptgruppe",
           "group_ceiling": "Deckenlampe (CCT)",
-          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)"
-        }
-      },
-      "areas": {
-        "title": "Bereiche",
-        "data": {
-          "hallway_light": "Flurlicht (R14)",
-          "hallway_trigger_entities": "Flur-Trigger: Tür/Bewegung (R14)",
-          "bathroom_light": "Badlicht (R15)",
-          "bathroom_vibration_entity": "Klodeckel-Vibrationssensor (R15)",
-          "bedroom_group": "Schlafzimmer-Gruppe (R16)"
-        }
-      },
-      "ring_presets": {
-        "title": "Ring & Scene Presets",
-        "data": {
-          "ring_target_entities": "RGB-Ringe (Aqara, mehrere, R17)",
+          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)",
           "preset_catalog_entity": "Scene-Presets Katalog-Sensor (UUID-Lookup)"
         }
       },
@@ -152,6 +112,99 @@
           "startup_block_seconds": "Startup-Block (Sekunden)",
           "crossfade_seconds": "Crossfade-Dauer (Sekunden)",
           "scene_interval_seconds": "Scene-Interval (Sekunden)"
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "gaming": {
+      "initiate_flow": { "user": "Gaming-Policy hinzufügen" },
+      "entry_type": "Gaming-Policy",
+      "step": {
+        "user": {
+          "title": "Gaming-Policy",
+          "description": "Eigener Title-Classifier → Scene-Preset (nur bei Activity free_time/idle).",
+          "data": {
+            "name": "Name",
+            "classifier_entity": "Title-Classifier (Spiele-Quelle, z.B. PC)",
+            "trigger_value": "Auslöse-Wert (z.B. overwatch)",
+            "preset_enum": "Scene-Preset-Schlüssel"
+          }
+        }
+      }
+    },
+    "music": {
+      "initiate_flow": { "user": "Musik-Party-Policy hinzufügen" },
+      "entry_type": "Musik-Party-Policy",
+      "step": {
+        "user": {
+          "title": "Musik-Party-Policy",
+          "data": {
+            "name": "Name",
+            "classifier_entity": "Title-Classifier (Musik-Quelle)",
+            "trigger_value": "Auslöse-Wert (z.B. party)",
+            "preset_enum": "Scene-Preset-Schlüssel (Disco)",
+            "require_birthday": "Nur bei Kalender-Thema „geburtstag“"
+          }
+        }
+      }
+    },
+    "notification_ring": {
+      "initiate_flow": { "user": "Notification-RGB (Ringe) hinzufügen" },
+      "entry_type": "Notification-RGB",
+      "step": {
+        "user": {
+          "title": "Notification-RGB (Aqara Ringe)",
+          "description": "Status-Anzeige des Activity State auf einem oder mehreren RGB-Ringen (simultan).",
+          "data": {
+            "name": "Name",
+            "ring_target_entities": "RGB-Ringe (Aqara, mehrere)",
+            "activity_state_entity": "Activity-Quelle (optional — sonst Hub)"
+          }
+        }
+      }
+    },
+    "hallway": {
+      "initiate_flow": { "user": "Flur-Policy hinzufügen" },
+      "entry_type": "Flur",
+      "step": {
+        "user": {
+          "title": "Flur (R14)",
+          "data": {
+            "name": "Name",
+            "hallway_light": "Flurlicht",
+            "hallway_trigger_entities": "Trigger: Tür/Bewegung"
+          }
+        }
+      }
+    },
+    "bathroom": {
+      "initiate_flow": { "user": "Bad-Policy hinzufügen" },
+      "entry_type": "Bad",
+      "step": {
+        "user": {
+          "title": "Bad-Vergessensschutz (R15)",
+          "data": {
+            "name": "Name",
+            "bathroom_light": "Badlicht",
+            "bathroom_vibration_entity": "Klodeckel-Vibrationssensor",
+            "bathroom_timeout_seconds": "Timeout (Sekunden, Standard 3600)"
+          }
+        }
+      }
+    },
+    "bedroom": {
+      "initiate_flow": { "user": "Schlafzimmer-Signal hinzufügen" },
+      "entry_type": "Schlafzimmer",
+      "step": {
+        "user": {
+          "title": "Schlafzimmer-Bettgeh-Signal (R16)",
+          "data": {
+            "name": "Name",
+            "bedroom_group": "Schlafzimmer-Gruppe",
+            "awake_minutes_entity": "Awake-Dauer in Minuten",
+            "preset_enum": "Scene-Preset-Schlüssel"
+          }
         }
       }
     }

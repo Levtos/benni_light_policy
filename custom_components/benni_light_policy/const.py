@@ -135,6 +135,40 @@ CONF_AWAKE_MINUTES: Final = "awake_minutes_entity"
 CONF_RING_TARGETS: Final = "ring_target_entities"         # Aqara RGB Ringe (mehrere, simultan)
 CONF_RING_PRESET_MAP: Final = "ring_preset_map"           # dict activity_state -> effect name
 
+# --------------------------------------------------------------------------- #
+# Subentries — typisierte Policies (Hub + Subentries-Architektur, 2026-05-29)
+# --------------------------------------------------------------------------- #
+SUBENTRY_GAMING: Final = "gaming"
+SUBENTRY_MUSIC: Final = "music"
+SUBENTRY_NOTIFICATION_RING: Final = "notification_ring"
+SUBENTRY_HALLWAY: Final = "hallway"
+SUBENTRY_BATHROOM: Final = "bathroom"
+SUBENTRY_BEDROOM: Final = "bedroom"
+SUBENTRY_TYPES: Final = (
+    SUBENTRY_GAMING, SUBENTRY_MUSIC, SUBENTRY_NOTIFICATION_RING,
+    SUBENTRY_HALLWAY, SUBENTRY_BATHROOM, SUBENTRY_BEDROOM,
+)
+
+# Generische Subentry-Config-Keys (je Subentry nur seine eigenen Felder).
+CONF_CLASSIFIER_ENTITY: Final = "classifier_entity"   # Gaming/Musik: eigener Title-Classifier
+CONF_TRIGGER_VALUE: Final = "trigger_value"           # Wert, der die Policy auslöst
+CONF_PRESET_ENUM: Final = "preset_enum"               # Ziel-Preset-Schlüssel
+CONF_REQUIRE_BIRTHDAY: Final = "require_birthday"      # Musik: nur bei Kalender-Thema geburtstag
+CONF_BATHROOM_TIMEOUT: Final = "bathroom_timeout_seconds"
+
+# Toolbox-Auto-Prefill: Hub-Foundation-Felder werden mit den bekannten
+# Singleton-Entity-IDs der Benni-Toolbox vorbelegt (falls vorhanden) — der User
+# bestätigt nur, statt zu suchen. Geräte-spezifische Felder (Lux/Wetter/…) bleiben leer.
+TOOLBOX_PREFILL: Final[dict[str, str]] = {
+    CONF_BIO_STATE: "sensor.benni_context_bio_state",
+    CONF_ACTIVITY_STATE: "sensor.benni_context_activity_state",
+    CONF_DAY_STATE: "sensor.benni_core_day_state",
+    CONF_PRESENCE_PERSONAL: "sensor.benni_context_presence_personal",
+    CONF_PRESENCE_HOUSEHOLD: "sensor.benni_context_presence_household",
+    CONF_PRESENCE_TRANSITION: "sensor.benni_context_presence_transition",
+    CONF_CALENDAR_THEME: "sensor.benni_context_day_context",
+}
+
 # Options.
 CONF_APPLY_ENABLED: Final = "apply_enabled"
 CONF_STARTUP_BLOCK_SECONDS: Final = "startup_block_seconds"

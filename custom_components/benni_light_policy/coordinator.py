@@ -43,6 +43,7 @@ from .const import (
     CONF_BIO_STATE,
     CONF_BRIGHTNESS,
     CONF_CALENDAR_THEME,
+    CONF_CLASSIFIER_ENTITY,
     CONF_CROSSFADE_SECONDS,
     CONF_DAY_STATE,
     CONF_ENTERTAINMENT_STABLE,
@@ -57,11 +58,14 @@ from .const import (
     CONF_PRESENCE_PERSONAL,
     CONF_PRESENCE_TRANSITION,
     CONF_PRESET_CATALOG,
+    CONF_PRESET_ENUM,
+    CONF_REQUIRE_BIRTHDAY,
     CONF_SCENE_INTERVAL_SECONDS,
     CONF_SEASON,
     CONF_STARTUP_BLOCK_SECONDS,
     CONF_SYSTEM_READY,
     CONF_TITLE_CLASSIFIER,
+    CONF_TRIGGER_VALUE,
     CONF_WEATHER,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_BRIGHTNESS,
@@ -77,6 +81,9 @@ from .const import (
     PRESENCE_TRANSITION_COMING_HOME,
     PRESET_BEDROOM_BEDTIME,
     SCENE_PRESETS_DOMAIN,
+    SUBENTRY_BEDROOM,
+    SUBENTRY_GAMING,
+    SUBENTRY_MUSIC,
     TMC_FALLBACK_HOUR,
     TMC_TRIGGER_LUX,
     WEATHER_DARK_WINDOW_SECONDS,
@@ -135,6 +142,7 @@ class LightPolicyCoordinator:
 
         self._areas: list = []
         self._bedtime_active = False
+        self._bedtime_active_ids: set[str] = set()
         self._ring_mode: str | None = None
         self._last_weather_dark = False
 
@@ -188,18 +196,20 @@ class LightPolicyCoordinator:
             CONF_BIO_STATE, CONF_DAY_STATE, CONF_ACTIVITY_STATE, CONF_LUX,
             CONF_PRESENCE_PERSONAL, CONF_PRESENCE_HOUSEHOLD, CONF_GUEST,
             CONF_PRESENCE_TRANSITION,
-            CONF_SEASON, CONF_CALENDAR_THEME, CONF_TITLE_CLASSIFIER,
+            CONF_SEASON, CONF_CALENDAR_THEME,
             CONF_ENTERTAINMENT_STABLE, CONF_OVERNIGHT_AWAY, CONF_SYSTEM_READY,
             CONF_WEATHER,
+            CONF_GROUP_MAIN, CONF_GROUP_CEILING, CONF_GROUP_ALL,
         ):
             v = self._opt(key)
             if isinstance(v, str) and v:
                 watch.add(v)
-        # Gruppen mitbeobachten → externe On-Schaltung triggert Reconcile.
-        for key in (CONF_GROUP_MAIN, CONF_GROUP_CEILING, CONF_GROUP_ALL):
-            v = self._opt(key)
-            if isinstance(v, str) and v:
-                watch.add(v)
+        # Subentry-Quellen (Gaming/Musik-Classifier, Bedroom-Awake) mitbeobachten.
+        for sub in self.entry.subentries.values():
+            for key in (CONF_CLASSIFIER_ENTITY, CONF_AWAKE_MINUTES):
+                v = sub.data.get(key)
+                if isinstance(v, str) and v:
+                    watch.add(v)
 
         if watch:
             self._unsub.append(
@@ -209,8 +219,8 @@ class LightPolicyCoordinator:
             async_track_time_interval(self.hass, self._on_interval, timedelta(seconds=30))
         )
 
-        # Bereichs-Controller (R14/R15/R17) starten — eigene Listener.
-        self._areas = areas.build_controllers(self)
+        # Bereichs-Controller je Subentry (Flur/Bad/Notification-RGB) starten.
+        self._areas = areas.build_controllers_from_subentries(self, self.entry.subentries.values())
         for ctrl in self._areas:
             ctrl.start()
 
@@ -359,6 +369,7 @@ class LightPolicyCoordinator:
             apply_enabled=self.apply_enabled,
             manual_off_active=self._manual_off,
             brightness_profile=self._opt(CONF_BRIGHTNESS),
+            extra_policies=self._build_extra_policies(),
         )
 
         hash_changed = self._last_plan is None or self._last_plan.scene_hash != plan.scene_hash
@@ -374,22 +385,59 @@ class LightPolicyCoordinator:
             cb()
         return plan
 
+    def _read_entity(self, eid: str | None) -> str | None:
+        if not eid:
+            return None
+        st = self.hass.states.get(eid)
+        if st is None or st.state in ("unknown", "unavailable"):
+            return None
+        return st.state
+
+    def _build_extra_policies(self) -> list[policy.PolicyDef]:
+        """Gaming/Musik-Subentries → Policies (eigener Classifier-Wert + Mapping)."""
+        out: list[policy.PolicyDef] = []
+        for sub in self.entry.subentries.values():
+            d = sub.data
+            trig = d.get(CONF_TRIGGER_VALUE)
+            preset = d.get(CONF_PRESET_ENUM)
+            if not (trig and preset):
+                continue
+            value = self._read_entity(d.get(CONF_CLASSIFIER_ENTITY))
+            if sub.subentry_type == SUBENTRY_GAMING:
+                out.append(policy.make_gaming_policy(value, {trig: preset}))
+            elif sub.subentry_type == SUBENTRY_MUSIC:
+                out.append(policy.make_music_policy(
+                    value, frozenset({trig}), preset,
+                    require_birthday=bool(d.get(CONF_REQUIRE_BIRTHDAY, True)),
+                ))
+        return out
+
     def _evaluate_bedtime_signal(self, ctx: policy.Context) -> None:
-        """R16: edge-getriggert — Schlafzimmer-Bettgeh-Signal einmalig anwenden."""
-        awake = _float_or_none(self._read(CONF_AWAKE_MINUTES))
-        due = policy.bedtime_signal_due(
-            ctx.day_state, ctx.bio_state, awake,
-            threshold_minutes=BEDTIME_AWAKE_THRESHOLD_MINUTES,
-        )
-        if due and not self._bedtime_active:
-            self._bedtime_active = True
-            group = self._opt(CONF_BEDROOM_GROUP)
-            if self.apply_enabled and group:
-                self.hass.async_create_task(
-                    self.async_apply_simple_preset(PRESET_BEDROOM_BEDTIME, [group])
-                )
-        elif not due:
-            self._bedtime_active = False
+        """R16: edge-getriggert pro Schlafzimmer-Subentry."""
+        any_active = False
+        for sub in self.entry.subentries.values():
+            if sub.subentry_type != SUBENTRY_BEDROOM:
+                continue
+            d = sub.data
+            awake = _float_or_none(self._read_entity(d.get(CONF_AWAKE_MINUTES)))
+            due = policy.bedtime_signal_due(
+                ctx.day_state, ctx.bio_state, awake,
+                threshold_minutes=BEDTIME_AWAKE_THRESHOLD_MINUTES,
+            )
+            sid = sub.subentry_id
+            if due:
+                any_active = True
+                if sid not in self._bedtime_active_ids:
+                    self._bedtime_active_ids.add(sid)
+                    group = d.get(CONF_BEDROOM_GROUP)
+                    preset = d.get(CONF_PRESET_ENUM) or PRESET_BEDROOM_BEDTIME
+                    if self.apply_enabled and group:
+                        self.hass.async_create_task(
+                            self.async_apply_simple_preset(preset, [group])
+                        )
+            else:
+                self._bedtime_active_ids.discard(sid)
+        self._bedtime_active = any_active
 
     @property
     def bedtime_signal_active(self) -> bool:

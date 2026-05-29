@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -339,39 +339,6 @@ def _eval_presence_sim(ctx: Context, gate: bool, profile: dict[str, int]) -> Pla
     )
 
 
-def _eval_music_party(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
-    # OQ-2: Party-Titel-Enums noch nicht definiert → derzeit inaktiv.
-    if not (
-        ctx.title_classifier in PARTY_TITLES
-        and (ctx.calendar_theme or "").lower() == "geburtstag"
-        and ctx.activity_state in ACTIVITY_PRESET_DRIVING
-    ):
-        return None
-    return Plan(
-        mode=MODE_MUSIC_PARTY, preset_enum=MODE_MUSIC_PARTY,
-        brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
-        targets=[GROUP_MAIN], lux_gate_on=gate, reason="music_party",
-    )
-
-
-def _eval_gaming(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
-    if ctx.activity_state not in ACTIVITY_PRESET_DRIVING:
-        return None
-    if ctx.title_classifier == TITLE_OVERWATCH:
-        return Plan(
-            mode=MODE_PC_OVERWATCH, preset_enum=PRESET_PC_OVERWATCH,
-            brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
-            targets=[GROUP_MAIN], lux_gate_on=gate, reason="pc_overwatch",
-        )
-    if ctx.title_classifier == TITLE_HEARTHSTONE:
-        return Plan(
-            mode=MODE_PC_HEARTHSTONE, preset_enum=PRESET_PC_HEARTHSTONE,
-            brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
-            targets=[GROUP_MAIN], lux_gate_on=gate, reason="pc_hearthstone",
-        )
-    return None
-
-
 def _eval_cinema(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
     if not (ctx.entertainment_stable and not ctx.guest):
         return None
@@ -402,27 +369,98 @@ class PolicyDef:
     evaluate: Callable[[Context, bool, dict[str, int]], Plan | None]
 
 
-# Reihenfolge == Prioritätsreihenfolge (§4.1). `dayphase` ist terminal.
+# Prioritäten (§4.1). Kleiner = höher.
+PRIO_WAKING = 1
+PRIO_IDLE_SLEEP = 2
+PRIO_IDLE_LUX = 3
+PRIO_PRIVATE_TIME = 4
+PRIO_WORK_HOME = 5
+PRIO_HOUSEHOLD = 6
+PRIO_PRESENCE_SIM = 7
+PRIO_MUSIC_PARTY = 8
+PRIO_GAMING = 9
+PRIO_CINEMA = 11
+PRIO_DAYPHASE = 12
+
+# Kern-Policies: immer vorhanden, brauchen nur Foundation + Lampengruppen (Hub).
+# gaming/music_party sind NICHT im Kern — sie werden per Subentry beigesteuert
+# (eigener Title-Classifier + Mapping) und über `extra_policies` eingespeist.
 LIVING_ROOM_POLICIES: tuple[PolicyDef, ...] = (
-    PolicyDef("waking", 1, _eval_waking),
-    PolicyDef("idle_sleep", 2, _eval_sleep_off),
-    PolicyDef("idle_lux", 3, _eval_lux_off),
-    PolicyDef("private_time", 4, _eval_private_time),
-    PolicyDef("work_home", 5, _eval_work_home),
-    PolicyDef("household", 6, _eval_household),
-    PolicyDef("presence_sim", 7, _eval_presence_sim),
-    PolicyDef("music_party", 8, _eval_music_party),
-    PolicyDef("gaming", 9, _eval_gaming),
-    PolicyDef("cinema", 11, _eval_cinema),
-    PolicyDef("dayphase", 12, _eval_dayphase),
+    PolicyDef("waking", PRIO_WAKING, _eval_waking),
+    PolicyDef("idle_sleep", PRIO_IDLE_SLEEP, _eval_sleep_off),
+    PolicyDef("idle_lux", PRIO_IDLE_LUX, _eval_lux_off),
+    PolicyDef("private_time", PRIO_PRIVATE_TIME, _eval_private_time),
+    PolicyDef("work_home", PRIO_WORK_HOME, _eval_work_home),
+    PolicyDef("household", PRIO_HOUSEHOLD, _eval_household),
+    PolicyDef("presence_sim", PRIO_PRESENCE_SIM, _eval_presence_sim),
+    PolicyDef("cinema", PRIO_CINEMA, _eval_cinema),
+    PolicyDef("dayphase", PRIO_DAYPHASE, _eval_dayphase),
 )
 
 POLICY_KINDS: tuple[str, ...] = tuple(p.kind for p in LIVING_ROOM_POLICIES)
 
 
-def _decide_plan(ctx: Context, lux_gate_on: bool, profile: dict[str, int]) -> Plan:
-    """Arbiter: erste zutreffende Policy in Prioritätsreihenfolge gewinnt."""
-    for pol in LIVING_ROOM_POLICIES:
+# --- Subentry-beigesteuerte Policies (typisiert, mit eigener Config) ----------
+def make_gaming_policy(
+    classifier_value: str | None,
+    mapping: dict[str, str],
+    *,
+    priority: int = PRIO_GAMING,
+    target: str = GROUP_MAIN,
+) -> PolicyDef:
+    """Gaming-Subentry: eigener Title-Classifier-Wert → Preset (free_time/idle)."""
+
+    def _ev(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+        if ctx.activity_state not in ACTIVITY_PRESET_DRIVING:
+            return None
+        preset = mapping.get(classifier_value or "")
+        if not preset:
+            return None
+        return Plan(
+            mode=f"gaming:{classifier_value}", preset_enum=preset,
+            brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
+            targets=[target], lux_gate_on=gate,
+            reason=f"gaming: classifier={classifier_value} → {preset}",
+        )
+
+    return PolicyDef("gaming", priority, _ev)
+
+
+def make_music_policy(
+    classifier_value: str | None,
+    trigger_values: frozenset[str],
+    preset_enum: str,
+    *,
+    require_birthday: bool = True,
+    calendar_theme: str | None = None,
+    priority: int = PRIO_MUSIC_PARTY,
+    target: str = GROUP_MAIN,
+) -> PolicyDef:
+    """Musik-Party-Subentry: Musik-Classifier-Wert (+ optional Geburtstag) → Disco-Preset."""
+
+    def _ev(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+        if ctx.activity_state not in ACTIVITY_PRESET_DRIVING:
+            return None
+        if require_birthday and (ctx.calendar_theme or "").lower() != "geburtstag":
+            return None
+        if classifier_value not in trigger_values:
+            return None
+        return Plan(
+            mode=MODE_MUSIC_PARTY, preset_enum=preset_enum,
+            brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
+            targets=[target], lux_gate_on=gate, reason="music_party",
+        )
+
+    return PolicyDef("music_party", priority, _ev)
+
+
+def _arbitrate(
+    ctx: Context, lux_gate_on: bool, profile: dict[str, int],
+    extra_policies: Iterable[PolicyDef],
+) -> Plan:
+    """Kern-Policies + Subentry-Policies, nach Priorität; erste zutreffende gewinnt."""
+    ordered = sorted([*LIVING_ROOM_POLICIES, *extra_policies], key=lambda p: p.priority)
+    for pol in ordered:
         result = pol.evaluate(ctx, lux_gate_on, profile)
         if result is not None:
             return result
@@ -437,10 +475,15 @@ def decide(
     apply_enabled: bool,
     manual_off_active: bool,
     brightness_profile: dict[str, int] | None = None,
+    extra_policies: Iterable[PolicyDef] = (),
 ) -> Plan:
-    """Vollständige Entscheidung inkl. Gating-Overlay."""
+    """Vollständige Entscheidung inkl. Gating-Overlay.
+
+    `extra_policies` = vom Hub aus Subentries gebaute Policies (Gaming/Musik),
+    die mit den Kern-Policies nach Priorität konkurrieren.
+    """
     profile = {**DEFAULT_BRIGHTNESS, **(brightness_profile or {})}
-    plan = _decide_plan(ctx, lux_gate_on, profile)
+    plan = _arbitrate(ctx, lux_gate_on, profile, extra_policies)
 
     # Gating-Overlay — verändert nur apply_allowed/blockers, nie den Plan selbst.
     if not apply_enabled:
