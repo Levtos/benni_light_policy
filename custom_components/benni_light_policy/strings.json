@@ -42,7 +42,7 @@
       },
       "options": {
         "title": "5/5 · Optionen",
-        "description": "Apply ist standardmäßig AUS (Shadow). Spezialfälle (Gaming, Musik, Ringe, Flur, Bad, Schlafzimmer) später als Subentries hinzufügen.",
+        "description": "Apply ist standardmäßig AUS (Shadow). Spezialfälle (Gaming, Musik, Ringe, Flur, Bad, Wake-Up) später als Subentries hinzufügen.",
         "data": {
           "apply_enabled": "Apply aktiviert (aus = Shadow)",
           "startup_block_seconds": "Startup-Block (Sekunden)",
@@ -127,8 +127,8 @@
           "data": {
             "name": "Name",
             "classifier_entity": "Title-Classifier (Spiele-Quelle, z.B. PC)",
-            "trigger_value": "Auslöse-Wert (z.B. overwatch)",
-            "preset_enum": "Scene-Preset-Schlüssel"
+            "trigger_value": "Auslöse-Wert (Classifier-Enum, z.B. 1)",
+            "preset_enum": "Scene-Preset-UUID"
           }
         }
       }
@@ -142,8 +142,8 @@
           "data": {
             "name": "Name",
             "classifier_entity": "Title-Classifier (Musik-Quelle)",
-            "trigger_value": "Auslöse-Wert (z.B. party)",
-            "preset_enum": "Scene-Preset-Schlüssel (Disco)",
+            "trigger_value": "Auslöse-Wert (Classifier-Enum, z.B. 2)",
+            "preset_enum": "Scene-Preset-UUID (Disco)",
             "require_birthday": "Nur bei Kalender-Thema „geburtstag“"
           }
         }
@@ -186,24 +186,23 @@
           "title": "Bad-Vergessensschutz (R15)",
           "data": {
             "name": "Name",
-            "bathroom_light": "Badlicht",
+            "bathroom_light": "Bad-Licht / -Schalter (Light oder Switch)",
             "bathroom_vibration_entity": "Klodeckel-Vibrationssensor",
             "bathroom_timeout_seconds": "Timeout (Sekunden, Standard 3600)"
           }
         }
       }
     },
-    "bedroom": {
-      "initiate_flow": { "user": "Schlafzimmer-Signal hinzufügen" },
-      "entry_type": "Schlafzimmer",
+    "wake_up": {
+      "initiate_flow": { "user": "Wake-Up-Licht hinzufügen" },
+      "entry_type": "Wake-Up",
       "step": {
         "user": {
-          "title": "Schlafzimmer-Bettgeh-Signal (R16)",
+          "title": "Aufsteh-/Wake-Up-Licht (R6, via Wake-Planner → bio_state=waking)",
+          "description": "Welche Lampen sollen beim Aufstehen ansteuern? Mehrere erlaubt (z.B. Schlafzimmer + Wohnzimmer). Stufenweise Helligkeit übernimmt der Wake-Planner.",
           "data": {
             "name": "Name",
-            "bedroom_group": "Schlafzimmer-Gruppe",
-            "awake_minutes_entity": "Awake-Dauer in Minuten",
-            "preset_enum": "Scene-Preset-Schlüssel"
+            "wake_up_targets": "Aufsteh-Lampen (mehrere)"
           }
         }
       }

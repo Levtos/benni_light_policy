@@ -143,10 +143,10 @@ SUBENTRY_MUSIC: Final = "music"
 SUBENTRY_NOTIFICATION_RING: Final = "notification_ring"
 SUBENTRY_HALLWAY: Final = "hallway"
 SUBENTRY_BATHROOM: Final = "bathroom"
-SUBENTRY_BEDROOM: Final = "bedroom"
+SUBENTRY_WAKE_UP: Final = "wake_up"
 SUBENTRY_TYPES: Final = (
     SUBENTRY_GAMING, SUBENTRY_MUSIC, SUBENTRY_NOTIFICATION_RING,
-    SUBENTRY_HALLWAY, SUBENTRY_BATHROOM, SUBENTRY_BEDROOM,
+    SUBENTRY_HALLWAY, SUBENTRY_BATHROOM, SUBENTRY_WAKE_UP,
 )
 
 # Generische Subentry-Config-Keys (je Subentry nur seine eigenen Felder).
@@ -155,6 +155,9 @@ CONF_TRIGGER_VALUE: Final = "trigger_value"           # Wert, der die Policy aus
 CONF_PRESET_ENUM: Final = "preset_enum"               # Ziel-Preset-Schlüssel
 CONF_REQUIRE_BIRTHDAY: Final = "require_birthday"      # Musik: nur bei Kalender-Thema geburtstag
 CONF_BATHROOM_TIMEOUT: Final = "bathroom_timeout_seconds"
+# Wake-Up-Lampen (R6): vom Wake-Planner via bio_state=waking ausgelöst.
+# Multi-Light — typischerweise „alles außer Küche" (mehrere Räume erlaubt).
+CONF_WAKE_UP_TARGETS: Final = "wake_up_targets"
 
 # Toolbox-Auto-Prefill: Hub-Foundation-Felder werden mit den bekannten
 # Singleton-Entity-IDs der Benni-Toolbox vorbelegt (falls vorhanden) — der User
@@ -196,10 +199,9 @@ GROUP_PREFILL: Final[dict[str, list[str]]] = {
     ],
 }
 
-# Subentry-Felder, die sich eindeutig vorbelegen lassen.
-SUBENTRY_PREFILL: Final[dict[str, str]] = {
-    CONF_AWAKE_MINUTES: "sensor.benni_core_user_awake_duration",
-}
+# Subentry-Felder, die sich eindeutig vorbelegen lassen (aktuell keine —
+# Wake-Up-Subentry braucht Light-Liste, die ist installations-spezifisch).
+SUBENTRY_PREFILL: Final[dict[str, str]] = {}
 
 # Options.
 CONF_APPLY_ENABLED: Final = "apply_enabled"

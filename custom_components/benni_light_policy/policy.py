@@ -101,7 +101,8 @@ class Plan:
     brightness: int | None
     color_temp: int | None
     apply_kind: str
-    targets: list[str] = field(default_factory=list)
+    targets: list[str] = field(default_factory=list)         # logische Gruppen-Namen
+    raw_targets: list[str] = field(default_factory=list)     # rohe entity_ids (z.B. Wake-Up Subentry)
     exclusive_off: list[str] = field(default_factory=list)
     reason: str = ""
     lux_gate_on: bool = False
@@ -123,6 +124,7 @@ class Plan:
             "color_temp": self.color_temp,
             "apply_kind": self.apply_kind,
             "targets": sorted(self.targets),
+            "raw_targets": sorted(self.raw_targets),
             "exclusive_off": sorted(self.exclusive_off),
         }
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -136,6 +138,7 @@ class Plan:
             "color_temp": self.color_temp,
             "apply_kind": self.apply_kind,
             "targets": list(self.targets),
+            "raw_targets": list(self.raw_targets),
             "exclusive_off": list(self.exclusive_off),
             "reason": self.reason,
             "lux_gate_on": self.lux_gate_on,
@@ -452,6 +455,28 @@ def make_music_policy(
         )
 
     return PolicyDef("music_party", priority, _ev)
+
+
+def make_wake_up_policy(
+    targets: list[str],
+    *,
+    priority: int = 0,
+) -> PolicyDef:
+    """Wake-Up-Subentry (R6): überschreibt das Kern-`waking` und richtet die
+    Helligkeit/CCT-Sequenz auf die konfigurierten Lampen aus (vom wake_planner
+    via bio_state=waking ausgelöst). Priorität 0 = vor dem Kern-`waking`."""
+
+    def _ev(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+        if ctx.bio_state != BIO_WAKING or not targets:
+            return None
+        return Plan(
+            mode=MODE_WAKING, preset_enum=None,
+            brightness=_brightness(profile, MODE_WAKING), color_temp=COLOR_TEMP_WAKING,
+            apply_kind=APPLY_CCT, raw_targets=list(targets), lux_gate_on=gate,
+            reason=f"wake_up: bio=waking → {len(targets)} Lampen",
+        )
+
+    return PolicyDef("wake_up", priority, _ev)
 
 
 def _arbitrate(

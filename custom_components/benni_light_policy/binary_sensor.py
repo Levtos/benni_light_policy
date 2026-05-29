@@ -11,7 +11,6 @@ from .const import (
     DOMAIN,
     OBJID_LUX_GATE,
     UID_APPLY_BLOCKED,
-    UID_BEDTIME_SIGNAL,
     UID_LUX_GATE,
     unique_id,
 )
@@ -25,7 +24,6 @@ async def async_setup_entry(
     async_add_entities([
         LuxGateBinarySensor(coord, entry),
         ApplyBlockedBinarySensor(coord, entry),
-        BedtimeSignalBinarySensor(coord, entry),
     ])
 
 
@@ -66,19 +64,3 @@ class ApplyBlockedBinarySensor(LightPolicyEntity, BinarySensorEntity):
     def extra_state_attributes(self):
         p = self.coord.last_plan
         return {"blockers": list(p.blockers) if p else []}
-
-
-class BedtimeSignalBinarySensor(LightPolicyEntity, BinarySensorEntity):
-    """R16: on = Schlafzimmer-Bettgeh-Signal aktiv (14h wach + early/late_night)."""
-
-    _attr_icon = "mdi:bed-clock"
-
-    def __init__(self, coord, entry):
-        super().__init__(coord, entry)
-        self._attr_unique_id = unique_id(UID_BEDTIME_SIGNAL)
-        self._attr_name = "Bedroom Bedtime Signal"
-        self._attr_suggested_object_id = "bedroom_bedtime_signal_combined"
-
-    @property
-    def is_on(self) -> bool:
-        return bool(self.coord.bedtime_signal_active)

@@ -27,11 +27,9 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_ACTIVITY_STATE,
     CONF_APPLY_ENABLED,
-    CONF_AWAKE_MINUTES,
     CONF_BATHROOM_LIGHT,
     CONF_BATHROOM_TIMEOUT,
     CONF_BATHROOM_VIBRATION,
-    CONF_BEDROOM_GROUP,
     CONF_BIO_STATE,
     CONF_CALENDAR_THEME,
     CONF_CLASSIFIER_ENTITY,
@@ -58,6 +56,7 @@ from .const import (
     CONF_STARTUP_BLOCK_SECONDS,
     CONF_SYSTEM_READY,
     CONF_TRIGGER_VALUE,
+    CONF_WAKE_UP_TARGETS,
     CONF_WEATHER,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_CROSSFADE_SECONDS,
@@ -66,10 +65,9 @@ from .const import (
     DOMAIN,
     ENTITY_PREFILL,
     GROUP_PREFILL,
-    PRESET_BEDROOM_BEDTIME,
     SUBENTRY_PREFILL,
     SUBENTRY_BATHROOM,
-    SUBENTRY_BEDROOM,
+    SUBENTRY_WAKE_UP,
     SUBENTRY_GAMING,
     SUBENTRY_HALLWAY,
     SUBENTRY_MUSIC,
@@ -81,6 +79,10 @@ _ENTITY = selector.EntitySelector(selector.EntitySelectorConfig())
 _ENTITIES = selector.EntitySelector(selector.EntitySelectorConfig(multiple=True))
 _LIGHT = selector.EntitySelector(selector.EntitySelectorConfig(domain="light"))
 _LIGHTS = selector.EntitySelector(selector.EntitySelectorConfig(domain="light", multiple=True))
+# Bad-Licht ist nicht immer ein light.* — z.B. Shelly Switch.
+_LIGHT_OR_SWITCH = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain=["light", "switch"])
+)
 _BOOL = selector.BooleanSelector()
 _TEXT = selector.TextSelector(selector.TextSelectorConfig())
 _INT = vol.Coerce(int)
@@ -101,8 +103,8 @@ SELECTORS: dict[str, Any] = {
     CONF_CLASSIFIER_ENTITY: _ENTITY, CONF_TRIGGER_VALUE: _TEXT, CONF_PRESET_ENUM: _TEXT,
     CONF_REQUIRE_BIRTHDAY: _BOOL, CONF_RING_TARGETS: _LIGHTS,
     CONF_HALLWAY_LIGHT: _LIGHT, CONF_HALLWAY_TRIGGERS: _ENTITIES,
-    CONF_BATHROOM_LIGHT: _LIGHT, CONF_BATHROOM_VIBRATION: _ENTITY, CONF_BATHROOM_TIMEOUT: _INT,
-    CONF_BEDROOM_GROUP: _LIGHT, CONF_AWAKE_MINUTES: _ENTITY,
+    CONF_BATHROOM_LIGHT: _LIGHT_OR_SWITCH, CONF_BATHROOM_VIBRATION: _ENTITY, CONF_BATHROOM_TIMEOUT: _INT,
+    CONF_WAKE_UP_TARGETS: _LIGHTS,
 }
 
 INT_DEFAULTS: dict[str, int] = {
@@ -137,14 +139,14 @@ SUBENTRY_FIELDS: dict[str, tuple[str, ...]] = {
     SUBENTRY_NOTIFICATION_RING: (CONF_RING_TARGETS, CONF_ACTIVITY_STATE),
     SUBENTRY_HALLWAY: (CONF_HALLWAY_LIGHT, CONF_HALLWAY_TRIGGERS),
     SUBENTRY_BATHROOM: (CONF_BATHROOM_LIGHT, CONF_BATHROOM_VIBRATION, CONF_BATHROOM_TIMEOUT),
-    SUBENTRY_BEDROOM: (CONF_BEDROOM_GROUP, CONF_AWAKE_MINUTES, CONF_PRESET_ENUM),
+    SUBENTRY_WAKE_UP: (CONF_WAKE_UP_TARGETS,),
 }
 SUBENTRY_DEFAULT_TITLE: dict[str, str] = {
     SUBENTRY_GAMING: "Gaming", SUBENTRY_MUSIC: "Musik-Party",
     SUBENTRY_NOTIFICATION_RING: "Notification RGB", SUBENTRY_HALLWAY: "Flur",
-    SUBENTRY_BATHROOM: "Bad", SUBENTRY_BEDROOM: "Schlafzimmer",
+    SUBENTRY_BATHROOM: "Bad", SUBENTRY_WAKE_UP: "Wake-Up",
 }
-SUBENTRY_PRESET_DEFAULT: dict[str, str] = {SUBENTRY_BEDROOM: PRESET_BEDROOM_BEDTIME}
+SUBENTRY_PRESET_DEFAULT: dict[str, str] = {}
 
 
 def _marker(key: str, defaults: dict[str, Any]):
@@ -242,7 +244,7 @@ class LightPolicyConfigFlow(ConfigFlow, domain=DOMAIN):
             SUBENTRY_NOTIFICATION_RING: NotificationRingSubentryFlow,
             SUBENTRY_HALLWAY: HallwaySubentryFlow,
             SUBENTRY_BATHROOM: BathroomSubentryFlow,
-            SUBENTRY_BEDROOM: BedroomSubentryFlow,
+            SUBENTRY_WAKE_UP: WakeUpSubentryFlow,
         }
 
 
@@ -331,5 +333,5 @@ class BathroomSubentryFlow(_BasePolicySubentryFlow):
     policy_type = SUBENTRY_BATHROOM
 
 
-class BedroomSubentryFlow(_BasePolicySubentryFlow):
-    policy_type = SUBENTRY_BEDROOM
+class WakeUpSubentryFlow(_BasePolicySubentryFlow):
+    policy_type = SUBENTRY_WAKE_UP
