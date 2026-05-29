@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -243,122 +244,189 @@ def _brightness(profile: dict[str, int], key: str) -> int | None:
 
 
 # --------------------------------------------------------------------------- #
-# Entscheidungskette (Lastenheft §4.1) — erste zutreffende Bedingung gewinnt
+# Wohnzimmer-Policies (Lastenheft §4.1) — typisierte, prioritäts-geordnete Registry.
+#
+# Jede Policy ist ein Evaluator (Context, lux_gate, profile) -> Plan | None.
+# `None` = Policy trifft nicht zu. Der Arbiter nimmt die erste zutreffende in
+# Prioritätsreihenfolge (== „erste zutreffende Bedingung gewinnt" aus §4.1).
+# Diese Registry ist das Fundament für den späteren Hub + Subentries (Phase 2):
+# jede dieser Arten wird dort zu einem konfigurierbaren Subentry-Typ.
 # --------------------------------------------------------------------------- #
-def _decide_plan(ctx: Context, lux_gate_on: bool, profile: dict[str, int]) -> Plan:
-    awake_phase = ctx.day_state if ctx.day_state in DAY_PHASES else None
+def _awake_phase(ctx: Context) -> str | None:
+    return ctx.day_state if ctx.day_state in DAY_PHASES else None
 
-    # 1) waking — Weckerlicht (übersteuert sleep).
-    if ctx.bio_state == BIO_WAKING:
-        return Plan(
-            mode=MODE_WAKING, preset_enum=None,
-            brightness=_brightness(profile, MODE_WAKING), color_temp=COLOR_TEMP_WAKING,
-            apply_kind=APPLY_CCT, targets=[GROUP_ALL], lux_gate_on=lux_gate_on,
-            reason="waking: bio=waking (Weckerlicht, Lux-Gate ignoriert)",
-        )
 
-    # 2) idle/hard-off — Bio = sleep.
-    if ctx.bio_state == BIO_SLEEP:
-        return Plan(
-            mode=MODE_IDLE, preset_enum=None, brightness=0, color_temp=None,
-            apply_kind=APPLY_OFF, targets=[], exclusive_off=[GROUP_ALL],
-            lux_gate_on=lux_gate_on, reason="hard_off: bio=sleep",
-        )
+def _eval_waking(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if ctx.bio_state != BIO_WAKING:
+        return None
+    return Plan(
+        mode=MODE_WAKING, preset_enum=None,
+        brightness=_brightness(profile, MODE_WAKING), color_temp=COLOR_TEMP_WAKING,
+        apply_kind=APPLY_CCT, targets=[GROUP_ALL], lux_gate_on=gate,
+        reason="waking: bio=waking (Weckerlicht, Lux-Gate ignoriert)",
+    )
 
-    # 3) idle/hard-off — zu hell.
-    if not lux_gate_on:
-        return Plan(
-            mode=MODE_IDLE, preset_enum=None, brightness=0, color_temp=None,
-            apply_kind=APPLY_OFF, targets=[], exclusive_off=[GROUP_ALL],
-            lux_gate_on=lux_gate_on, reason="hard_off: lux_gate off (zu hell)",
-        )
 
-    # 4) private_time.
-    if ctx.activity_state == ACTIVITY_PRIVATE_TIME:
-        return Plan(
-            mode=MODE_PRIVATE_TIME, preset_enum=MODE_PRIVATE_TIME,
-            brightness=_brightness(profile, MODE_PRIVATE_TIME), color_temp=None,
-            apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], exclusive_off=[GROUP_CEILING],
-            lux_gate_on=lux_gate_on, reason="private_time: activity=private_time",
-        )
+def _eval_sleep_off(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if ctx.bio_state != BIO_SLEEP:
+        return None
+    return Plan(
+        mode=MODE_IDLE, preset_enum=None, brightness=0, color_temp=None,
+        apply_kind=APPLY_OFF, targets=[], exclusive_off=[GROUP_ALL],
+        lux_gate_on=gate, reason="hard_off: bio=sleep",
+    )
 
-    # 5) work_home — CCT-Arbeitslicht.
-    if ctx.activity_state == ACTIVITY_WORK_HOME:
-        return Plan(
-            mode=MODE_WORK_HOME, preset_enum=None,
-            brightness=_brightness(profile, MODE_WORK_HOME), color_temp=COLOR_TEMP_WORK_HOME,
-            apply_kind=APPLY_CCT, targets=[GROUP_CEILING, GROUP_MAIN],
-            lux_gate_on=lux_gate_on, reason="work_home: activity=work_home (CCT 5000K)",
-        )
 
-    # 6) household — wie aktuelle Tagesphase, Entertainment wird ignoriert.
-    if ctx.activity_state == ACTIVITY_HOUSEHOLD:
-        phase = awake_phase or "early_evening"
-        return Plan(
-            mode=MODE_HOUSEHOLD, preset_enum=_phase_preset(ctx, phase),
-            brightness=_brightness(profile, phase), color_temp=None,
-            apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=lux_gate_on,
-            reason=f"household: activity=household, phase={phase}",
-        )
+def _eval_lux_off(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if gate:
+        return None
+    return Plan(
+        mode=MODE_IDLE, preset_enum=None, brightness=0, color_temp=None,
+        apply_kind=APPLY_OFF, targets=[], exclusive_off=[GROUP_ALL],
+        lux_gate_on=gate, reason="hard_off: lux_gate off (zu hell)",
+    )
 
-    # 7) presence_sim — abwesend/bei_eltern in dunkler Phase, kein Übernacht-Signal.
-    #     R12: coming_home beendet die Simulation sofort (noch bevor presence_personal flippt).
-    if (
+
+def _eval_private_time(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if ctx.activity_state != ACTIVITY_PRIVATE_TIME:
+        return None
+    return Plan(
+        mode=MODE_PRIVATE_TIME, preset_enum=MODE_PRIVATE_TIME,
+        brightness=_brightness(profile, MODE_PRIVATE_TIME), color_temp=None,
+        apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], exclusive_off=[GROUP_CEILING],
+        lux_gate_on=gate, reason="private_time: activity=private_time",
+    )
+
+
+def _eval_work_home(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if ctx.activity_state != ACTIVITY_WORK_HOME:
+        return None
+    return Plan(
+        mode=MODE_WORK_HOME, preset_enum=None,
+        brightness=_brightness(profile, MODE_WORK_HOME), color_temp=COLOR_TEMP_WORK_HOME,
+        apply_kind=APPLY_CCT, targets=[GROUP_CEILING, GROUP_MAIN],
+        lux_gate_on=gate, reason="work_home: activity=work_home (CCT 5000K)",
+    )
+
+
+def _eval_household(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if ctx.activity_state != ACTIVITY_HOUSEHOLD:
+        return None
+    phase = _awake_phase(ctx) or "early_evening"
+    return Plan(
+        mode=MODE_HOUSEHOLD, preset_enum=_phase_preset(ctx, phase),
+        brightness=_brightness(profile, phase), color_temp=None,
+        apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=gate,
+        reason=f"household: activity=household, phase={phase}",
+    )
+
+
+def _eval_presence_sim(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    # R12: coming_home beendet die Simulation sofort (noch bevor presence_personal flippt).
+    awake_phase = _awake_phase(ctx)
+    if not (
         ctx.presence_personal in PRESENCE_SIM_TRIGGERS
         and awake_phase in PRESENCE_SIM_PHASES
         and not ctx.overnight_away
         and ctx.presence_transition != PRESENCE_TRANSITION_COMING_HOME
     ):
-        return Plan(
-            mode=MODE_PRESENCE_SIM, preset_enum=_phase_preset(ctx, awake_phase),
-            brightness=_brightness(profile, awake_phase), color_temp=None,
-            apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=lux_gate_on,
-            reason=f"presence_sim: presence={ctx.presence_personal}, phase={awake_phase}",
-        )
+        return None
+    return Plan(
+        mode=MODE_PRESENCE_SIM, preset_enum=_phase_preset(ctx, awake_phase),
+        brightness=_brightness(profile, awake_phase), color_temp=None,
+        apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=gate,
+        reason=f"presence_sim: presence={ctx.presence_personal}, phase={awake_phase}",
+    )
 
-    # 8) music_party — Party-Titel + Geburtstag + free_time/idle (OQ-2: derzeit inaktiv).
-    if (
+
+def _eval_music_party(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    # OQ-2: Party-Titel-Enums noch nicht definiert → derzeit inaktiv.
+    if not (
         ctx.title_classifier in PARTY_TITLES
         and (ctx.calendar_theme or "").lower() == "geburtstag"
         and ctx.activity_state in ACTIVITY_PRESET_DRIVING
     ):
+        return None
+    return Plan(
+        mode=MODE_MUSIC_PARTY, preset_enum=MODE_MUSIC_PARTY,
+        brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
+        targets=[GROUP_MAIN], lux_gate_on=gate, reason="music_party",
+    )
+
+
+def _eval_gaming(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if ctx.activity_state not in ACTIVITY_PRESET_DRIVING:
+        return None
+    if ctx.title_classifier == TITLE_OVERWATCH:
         return Plan(
-            mode=MODE_MUSIC_PARTY, preset_enum=MODE_MUSIC_PARTY,
+            mode=MODE_PC_OVERWATCH, preset_enum=PRESET_PC_OVERWATCH,
             brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
-            targets=[GROUP_MAIN], lux_gate_on=lux_gate_on, reason="music_party",
+            targets=[GROUP_MAIN], lux_gate_on=gate, reason="pc_overwatch",
         )
-
-    # 9/10) PC-Spiele — Title Classifier + free_time/idle.
-    if ctx.activity_state in ACTIVITY_PRESET_DRIVING:
-        if ctx.title_classifier == TITLE_OVERWATCH:
-            return Plan(
-                mode=MODE_PC_OVERWATCH, preset_enum=PRESET_PC_OVERWATCH,
-                brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
-                targets=[GROUP_MAIN], lux_gate_on=lux_gate_on, reason="pc_overwatch",
-            )
-        if ctx.title_classifier == TITLE_HEARTHSTONE:
-            return Plan(
-                mode=MODE_PC_HEARTHSTONE, preset_enum=PRESET_PC_HEARTHSTONE,
-                brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
-                targets=[GROUP_MAIN], lux_gate_on=lux_gate_on, reason="pc_hearthstone",
-            )
-
-    # 11) cinema — Entertainment stabil an + kein Gast (R8).
-    if ctx.entertainment_stable and not ctx.guest:
+    if ctx.title_classifier == TITLE_HEARTHSTONE:
         return Plan(
-            mode=MODE_CINEMA, preset_enum=MODE_CINEMA, brightness=None, color_temp=None,
-            apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], exclusive_off=[GROUP_CEILING],
-            lux_gate_on=lux_gate_on, reason="cinema: entertainment_stable on, kein Gast",
+            mode=MODE_PC_HEARTHSTONE, preset_enum=PRESET_PC_HEARTHSTONE,
+            brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
+            targets=[GROUP_MAIN], lux_gate_on=gate, reason="pc_hearthstone",
         )
+    return None
 
-    # 12) Tagesphase-Fallback — saisonales Preset der aktuellen Detailphase.
-    phase = awake_phase or "early_evening"
+
+def _eval_cinema(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if not (ctx.entertainment_stable and not ctx.guest):
+        return None
+    return Plan(
+        mode=MODE_CINEMA, preset_enum=MODE_CINEMA, brightness=None, color_temp=None,
+        apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], exclusive_off=[GROUP_CEILING],
+        lux_gate_on=gate, reason="cinema: entertainment_stable on, kein Gast",
+    )
+
+
+def _eval_dayphase(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan:
+    """Terminal — liefert immer einen Plan (saisonales Preset der Tagesphase)."""
+    phase = _awake_phase(ctx) or "early_evening"
     return Plan(
         mode=phase, preset_enum=_phase_preset(ctx, phase),
         brightness=_brightness(profile, phase), color_temp=None,
-        apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=lux_gate_on,
+        apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=gate,
         reason=f"dayphase fallback: {phase}",
     )
+
+
+@dataclass(frozen=True)
+class PolicyDef:
+    """Typisierte Wohnzimmer-Policy. priority: kleiner = höher (§4.1)."""
+
+    kind: str
+    priority: int
+    evaluate: Callable[[Context, bool, dict[str, int]], Plan | None]
+
+
+# Reihenfolge == Prioritätsreihenfolge (§4.1). `dayphase` ist terminal.
+LIVING_ROOM_POLICIES: tuple[PolicyDef, ...] = (
+    PolicyDef("waking", 1, _eval_waking),
+    PolicyDef("idle_sleep", 2, _eval_sleep_off),
+    PolicyDef("idle_lux", 3, _eval_lux_off),
+    PolicyDef("private_time", 4, _eval_private_time),
+    PolicyDef("work_home", 5, _eval_work_home),
+    PolicyDef("household", 6, _eval_household),
+    PolicyDef("presence_sim", 7, _eval_presence_sim),
+    PolicyDef("music_party", 8, _eval_music_party),
+    PolicyDef("gaming", 9, _eval_gaming),
+    PolicyDef("cinema", 11, _eval_cinema),
+    PolicyDef("dayphase", 12, _eval_dayphase),
+)
+
+POLICY_KINDS: tuple[str, ...] = tuple(p.kind for p in LIVING_ROOM_POLICIES)
+
+
+def _decide_plan(ctx: Context, lux_gate_on: bool, profile: dict[str, int]) -> Plan:
+    """Arbiter: erste zutreffende Policy in Prioritätsreihenfolge gewinnt."""
+    for pol in LIVING_ROOM_POLICIES:
+        result = pol.evaluate(ctx, lux_gate_on, profile)
+        if result is not None:
+            return result
+    return _eval_dayphase(ctx, lux_gate_on, profile)  # Sicherheitsnetz
 
 
 def decide(
