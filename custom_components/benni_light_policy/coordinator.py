@@ -450,7 +450,18 @@ class LightPolicyCoordinator:
             GROUP_CEILING: self._opt(CONF_GROUP_CEILING),
             GROUP_ALL: self._opt(CONF_GROUP_ALL),
         }
-        return [mapping[g] for g in logical if mapping.get(g)]
+        out: list[str] = []
+        for g in logical:
+            val = mapping.get(g)
+            if not val:
+                continue
+            if isinstance(val, str):
+                out.append(val)
+            else:  # Liste von Einzellampen
+                out.extend(val)
+        # Duplikate raus, Reihenfolge erhalten (z.B. GROUP_ALL ∪ GROUP_MAIN).
+        seen: set[str] = set()
+        return [e for e in out if not (e in seen or seen.add(e))]
 
     def _resolve_preset_id(self, preset_enum: str | None) -> tuple[str | None, dict[str, Any]]:
         """preset_enum → (preset_id, overrides) via Katalog-Sensor-Attribute."""

@@ -64,14 +64,16 @@ from .const import (
     DEFAULT_SCENE_INTERVAL_SECONDS,
     DEFAULT_STARTUP_BLOCK_SECONDS,
     DOMAIN,
+    ENTITY_PREFILL,
+    GROUP_PREFILL,
     PRESET_BEDROOM_BEDTIME,
+    SUBENTRY_PREFILL,
     SUBENTRY_BATHROOM,
     SUBENTRY_BEDROOM,
     SUBENTRY_GAMING,
     SUBENTRY_HALLWAY,
     SUBENTRY_MUSIC,
     SUBENTRY_NOTIFICATION_RING,
-    TOOLBOX_PREFILL,
 )
 
 # --- Selektoren (ungefiltert) ---
@@ -91,7 +93,7 @@ SELECTORS: dict[str, Any] = {
     CONF_CALENDAR_THEME: _ENTITY, CONF_ENTERTAINMENT_STABLE: _ENTITY,
     CONF_GUEST: _ENTITY, CONF_PRESENCE_TRANSITION: _ENTITY,
     CONF_OVERNIGHT_AWAY: _ENTITY, CONF_SYSTEM_READY: _ENTITY,
-    CONF_GROUP_MAIN: _LIGHT, CONF_GROUP_CEILING: _LIGHT, CONF_GROUP_ALL: _LIGHT,
+    CONF_GROUP_MAIN: _LIGHTS, CONF_GROUP_CEILING: _LIGHTS, CONF_GROUP_ALL: _LIGHTS,
     CONF_PRESET_CATALOG: _ENTITY,
     CONF_APPLY_ENABLED: _BOOL, CONF_STARTUP_BLOCK_SECONDS: _INT,
     CONF_CROSSFADE_SECONDS: _INT, CONF_SCENE_INTERVAL_SECONDS: _INT,
@@ -160,15 +162,26 @@ def _schema(keys: tuple[str, ...], defaults: dict[str, Any]) -> vol.Schema:
     return vol.Schema({_marker(k, defaults): SELECTORS[k] for k in keys})
 
 
+def _exists(hass, eid: str) -> bool:
+    return bool(eid) and hass.states.get(eid) is not None
+
+
 def _prefilled(keys: tuple[str, ...], data: dict[str, Any], hass) -> dict[str, Any]:
-    """Hub-Defaults inkl. Toolbox-Auto-Prefill (nur wenn Entity existiert)."""
+    """Hub-Defaults inkl. Auto-Prefill (Einzelwerte + Lampengruppen-Listen) —
+    jeweils NUR wenn die Entity(en) in HA existieren."""
     defaults = dict(data)
     for key in keys:
         if key in defaults:
             continue
-        candidate = TOOLBOX_PREFILL.get(key)
-        if candidate and hass.states.get(candidate) is not None:
-            defaults[key] = candidate
+        single = ENTITY_PREFILL.get(key)
+        if single and _exists(hass, single):
+            defaults[key] = single
+            continue
+        group = GROUP_PREFILL.get(key)
+        if group:
+            present = [e for e in group if _exists(hass, e)]
+            if present:
+                defaults[key] = present
     return defaults
 
 
@@ -285,6 +298,11 @@ class _BasePolicySubentryFlow(ConfigSubentryFlow):
         defaults: dict[str, Any] = {}
         if stype in SUBENTRY_PRESET_DEFAULT:
             defaults[CONF_PRESET_ENUM] = SUBENTRY_PRESET_DEFAULT[stype]
+        # Auto-Prefill eindeutiger Subentry-Felder (z.B. Awake-Dauer), wenn vorhanden.
+        for key in SUBENTRY_FIELDS[stype]:
+            cand = SUBENTRY_PREFILL.get(key)
+            if cand and key not in defaults and _exists(self.hass, cand):
+                defaults[key] = cand
         fields: dict[Any, Any] = {
             vol.Optional("name", default=SUBENTRY_DEFAULT_TITLE.get(stype, stype)): _TEXT
         }
