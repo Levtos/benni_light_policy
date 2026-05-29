@@ -220,3 +220,25 @@ def test_scene_hash_ignores_gating():
     on = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME))
     off = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME), apply_enabled=False)
     assert on.scene_hash == off.scene_hash
+
+
+# ---------------------------------------------------------------- policy registry (Phase 1)
+def test_registry_priorities_ascending_and_unique():
+    prios = [p.priority for p in P.LIVING_ROOM_POLICIES]
+    assert prios == sorted(prios)
+    assert len(prios) == len(set(prios))
+
+
+def test_registry_kinds_match_decision_chain():
+    # Die typisierte Registry muss die §4.1-Kette abbilden (Reihenfolge = Priorität).
+    assert P.POLICY_KINDS == (
+        "waking", "idle_sleep", "idle_lux", "private_time", "work_home",
+        "household", "presence_sim", "music_party", "gaming", "cinema", "dayphase",
+    )
+
+
+def test_dayphase_policy_is_terminal():
+    # Letzte Policy liefert immer einen Plan (kein None).
+    last = P.LIVING_ROOM_POLICIES[-1]
+    assert last.kind == "dayphase"
+    assert last.evaluate(_ctx(day_state="late_night"), True, dict(C.DEFAULT_BRIGHTNESS)) is not None
