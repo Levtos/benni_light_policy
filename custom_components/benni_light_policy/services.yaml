@@ -1,0 +1,11 @@
+apply_now:
+  name: Apply now
+  description: Re-evaluate the plan and force a re-apply (respects apply_enabled gating).
+
+set_manual_off:
+  name: Set manual-off hold
+  description: Block apply (no on/off) until the hold is cleared or bio-state goes sleep→awake.
+
+clear_manual_off:
+  name: Clear manual-off hold
+  description: Release the manual-off hold and re-evaluate.

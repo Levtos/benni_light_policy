@@ -1,0 +1,222 @@
+"""Pure-engine tests für policy.lux_gate() und policy.decide()."""
+from __future__ import annotations
+
+import lp_const as C
+import lp_policy as P
+
+
+def _ctx(**kw):
+    return P.Context(**kw)
+
+
+def _decide(ctx, **kw):
+    defaults = dict(
+        lux_gate_on=True,
+        startup_ready=True,
+        apply_enabled=True,
+        manual_off_active=False,
+    )
+    defaults.update(kw)
+    return P.decide(ctx, **defaults)
+
+
+# ---------------------------------------------------------------- lux gate
+def test_lux_gate_dark_opens():
+    assert P.lux_gate(100, C.SEASON_WINTER, None, day_state_known=True) is True
+
+
+def test_lux_gate_bright_closes():
+    assert P.lux_gate(900, C.SEASON_WINTER, None, day_state_known=True) is False
+
+
+def test_lux_gate_hysteresis_holds_between_thresholds():
+    # Winter: dark=250, bright=400. 300 liegt dazwischen → prev halten.
+    assert P.lux_gate(300, C.SEASON_WINTER, True, day_state_known=True) is True
+    assert P.lux_gate(300, C.SEASON_WINTER, False, day_state_known=True) is False
+
+
+def test_lux_gate_day_state_unknown_closes():
+    assert P.lux_gate(10, C.SEASON_WINTER, True, day_state_known=False) is False
+
+
+def test_lux_gate_lux_unavailable_holds_prev():
+    assert P.lux_gate(None, C.SEASON_WINTER, True, day_state_known=True) is True
+    assert P.lux_gate(None, C.SEASON_WINTER, None, day_state_known=True) is False
+
+
+def test_lux_gate_seasonal_threshold_differs():
+    # Sommer dark=400: 380 → an. Winter dark=250: 380 → (zwischen 250/400) hält prev.
+    assert P.lux_gate(380, C.SEASON_SUMMER, None, day_state_known=True) is True
+    assert P.lux_gate(380, C.SEASON_WINTER, False, day_state_known=True) is False
+
+
+def test_lux_gate_without_tmc_no_hysteresis():
+    # TMC nicht gesetzt → einfacher Vergleich: zwischen den Schwellen = aus (kein Halten).
+    assert P.lux_gate(300, C.SEASON_WINTER, True, day_state_known=True, tmc_set=False) is False
+    assert P.lux_gate(200, C.SEASON_WINTER, None, day_state_known=True, tmc_set=False) is True
+
+
+def test_lux_gate_weather_dark_forces_open():
+    # Heller Lux (Gate sonst zu) aber wetterbedingte Dunkelheit → offen.
+    assert P.lux_gate(900, C.SEASON_SUMMER, False, day_state_known=True, weather_dark=True) is True
+
+
+# ---------------------------------------------------------------- weather darkness (R10)
+def test_weather_darkness_triggers_on_drop_and_dark_icon():
+    assert P.weather_darkness(200, 1000, "rainy", "midday") is True
+
+
+def test_weather_darkness_needs_daytime():
+    assert P.weather_darkness(200, 1000, "rainy", "evening") is False
+
+
+def test_weather_darkness_needs_dark_icon():
+    assert P.weather_darkness(200, 1000, "sunny", "midday") is False
+
+
+def test_weather_darkness_small_drop_no_trigger():
+    assert P.weather_darkness(800, 1000, "cloudy", "morning") is False
+
+
+# ---------------------------------------------------------------- bedtime / hallway predicates
+def test_bedtime_signal_due():
+    assert P.bedtime_signal_due("late_night", "awake", 900) is True
+    assert P.bedtime_signal_due("late_night", "awake", 800) is False   # < 14h
+    assert P.bedtime_signal_due("afternoon", "awake", 900) is False    # falsche Phase
+    assert P.bedtime_signal_due("early_night", "sleep", 900) is False  # schläft
+    assert P.bedtime_signal_due("late_night", "awake", None) is False
+
+
+def test_hallway_should_light():
+    assert P.hallway_should_light(True, True) is True
+    assert P.hallway_should_light(True, False) is False   # zu hell
+    assert P.hallway_should_light(False, True) is False   # kein Trigger
+
+
+# ---------------------------------------------------------------- decision chain
+def test_waking_overrides_everything():
+    p = _decide(_ctx(bio_state=C.BIO_WAKING, day_state="late_night"), lux_gate_on=False)
+    assert p.mode == C.MODE_WAKING
+    assert p.apply_kind == P.APPLY_CCT
+    assert p.color_temp == C.COLOR_TEMP_WAKING
+
+
+def test_sleep_hard_off():
+    p = _decide(_ctx(bio_state=C.BIO_SLEEP))
+    assert p.mode == C.MODE_IDLE
+    assert p.apply_kind == P.APPLY_OFF
+    assert p.brightness == 0
+
+
+def test_lux_gate_off_hard_off():
+    p = _decide(_ctx(bio_state=C.BIO_AWAKE, activity_state=C.ACTIVITY_PRIVATE_TIME), lux_gate_on=False)
+    assert p.mode == C.MODE_IDLE
+    assert p.apply_kind == P.APPLY_OFF
+
+
+def test_private_time():
+    p = _decide(_ctx(activity_state=C.ACTIVITY_PRIVATE_TIME, day_state="late_evening"))
+    assert p.mode == C.MODE_PRIVATE_TIME
+    assert p.targets == [C.GROUP_MAIN]
+    assert C.GROUP_CEILING in p.exclusive_off
+    assert p.brightness == 80
+
+
+def test_work_home_cct():
+    p = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME))
+    assert p.mode == C.MODE_WORK_HOME
+    assert p.color_temp == C.COLOR_TEMP_WORK_HOME
+    assert p.apply_kind == P.APPLY_CCT
+
+
+def test_household_uses_dayphase_preset():
+    p = _decide(_ctx(activity_state=C.ACTIVITY_HOUSEHOLD, day_state="early_evening", season=C.SEASON_AUTUMN))
+    assert p.mode == C.MODE_HOUSEHOLD
+    assert p.preset_enum == "autumn_early_evening"
+
+
+def test_presence_sim():
+    p = _decide(_ctx(
+        presence_personal=C.PRESENCE_AWAY, day_state="late_evening",
+        season=C.SEASON_SUMMER, activity_state=C.ACTIVITY_IDLE,
+    ))
+    assert p.mode == C.MODE_PRESENCE_SIM
+    assert p.preset_enum == "summer_late_evening"
+
+
+def test_presence_sim_suppressed_by_overnight_away():
+    p = _decide(_ctx(
+        presence_personal=C.PRESENCE_AWAY, day_state="late_evening",
+        season=C.SEASON_SUMMER, overnight_away=True,
+    ))
+    assert p.mode != C.MODE_PRESENCE_SIM
+
+
+def test_presence_sim_ends_on_coming_home():
+    # R12: coming_home beendet die Simulation sofort.
+    p = _decide(_ctx(
+        presence_personal=C.PRESENCE_AWAY, day_state="late_evening",
+        season=C.SEASON_SUMMER, activity_state=C.ACTIVITY_IDLE,
+        presence_transition=C.PRESENCE_TRANSITION_COMING_HOME,
+    ))
+    assert p.mode != C.MODE_PRESENCE_SIM
+
+
+def test_pc_overwatch():
+    p = _decide(_ctx(activity_state=C.ACTIVITY_FREE_TIME, title_classifier=C.TITLE_OVERWATCH, day_state="early_night"))
+    assert p.mode == C.MODE_PC_OVERWATCH
+    assert p.preset_enum == C.PRESET_PC_OVERWATCH
+
+
+def test_cinema_blocked_by_guest():
+    base = dict(entertainment_stable=True, activity_state=C.ACTIVITY_FREE_TIME, day_state="late_evening")
+    assert _decide(_ctx(**base)).mode == C.MODE_CINEMA
+    assert _decide(_ctx(guest=True, **base)).mode != C.MODE_CINEMA
+
+
+def test_dayphase_fallback():
+    p = _decide(_ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="late_night", season=C.SEASON_WINTER))
+    assert p.mode == "late_night"
+    assert p.preset_enum == "winter_late_night"
+    assert p.brightness == 100
+
+
+def test_event_theme_overrides_season():
+    p = _decide(_ctx(activity_state=C.ACTIVITY_IDLE, day_state="early_evening", season=C.SEASON_AUTUMN, calendar_theme="weihnachten"))
+    assert p.preset_enum == "christmas_early_evening"
+
+
+# ---------------------------------------------------------------- gating overlay
+def test_apply_disabled_blocks_without_changing_plan():
+    p = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME), apply_enabled=False)
+    assert p.mode == C.MODE_WORK_HOME       # Plan unverändert
+    assert p.apply_allowed is False
+    assert "apply_disabled" in p.blockers
+
+
+def test_startup_block():
+    p = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME), startup_ready=False)
+    assert p.apply_allowed is False
+    assert "startup_block" in p.blockers
+
+
+def test_manual_off_hold_wins():
+    p = _decide(_ctx(bio_state=C.BIO_SLEEP), manual_off_active=True)
+    assert p.mode == C.MODE_IDLE            # Modus weiter berechnet
+    assert p.apply_allowed is False         # aber kein Hard-Off
+    assert "manual_off" in p.blockers
+
+
+# ---------------------------------------------------------------- scene hash
+def test_scene_hash_stable_and_changes():
+    a = _decide(_ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="late_night", season=C.SEASON_WINTER))
+    b = _decide(_ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="late_night", season=C.SEASON_WINTER))
+    assert a.scene_hash == b.scene_hash and len(a.scene_hash) == 16
+    c = _decide(_ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night", season=C.SEASON_WINTER))
+    assert c.scene_hash != a.scene_hash
+
+
+def test_scene_hash_ignores_gating():
+    on = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME))
+    off = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME), apply_enabled=False)
+    assert on.scene_hash == off.scene_hash

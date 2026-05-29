@@ -1,0 +1,80 @@
+"""Benni Light Policy — erstes Aggregat-Modul (eigene HACS-Integration).
+
+Single-Instance: ein Config-Entry verwaltet das Wohnzimmer (weitere Bereiche
+iterativ). Decision/Apply-Pattern wie cover_policy, aber standalone-Domain.
+"""
+from __future__ import annotations
+
+import logging
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant, ServiceCall
+
+from .const import (
+    DATA_COORDINATOR,
+    DOMAIN,
+    SERVICE_APPLY_NOW,
+    SERVICE_CLEAR_MANUAL_OFF,
+    SERVICE_SET_MANUAL_OFF,
+)
+from .coordinator import LightPolicyCoordinator
+
+_LOGGER = logging.getLogger(__name__)
+
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    coord = LightPolicyCoordinator(hass, entry)
+    await coord.async_load()
+    coord.async_start()
+    await coord.async_evaluate()
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {DATA_COORDINATOR: coord}
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _async_register_services(hass)
+    entry.async_on_unload(entry.add_update_listener(_async_reload))
+    return True
+
+
+async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        bucket = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if bucket:
+            bucket[DATA_COORDINATOR].async_stop()
+        if not hass.data[DOMAIN]:
+            for svc in (SERVICE_APPLY_NOW, SERVICE_SET_MANUAL_OFF, SERVICE_CLEAR_MANUAL_OFF):
+                hass.services.async_remove(DOMAIN, svc)
+    return unloaded
+
+
+def _coordinators(hass: HomeAssistant) -> list[LightPolicyCoordinator]:
+    return [b[DATA_COORDINATOR] for b in hass.data.get(DOMAIN, {}).values()]
+
+
+def _async_register_services(hass: HomeAssistant) -> None:
+    if hass.services.has_service(DOMAIN, SERVICE_APPLY_NOW):
+        return
+
+    async def _apply_now(_call: ServiceCall) -> None:
+        for coord in _coordinators(hass):
+            await coord.async_apply_now()
+
+    async def _set_manual_off(_call: ServiceCall) -> None:
+        for coord in _coordinators(hass):
+            await coord.async_set_manual_off()
+
+    async def _clear_manual_off(_call: ServiceCall) -> None:
+        for coord in _coordinators(hass):
+            await coord.async_clear_manual_off()
+
+    hass.services.async_register(DOMAIN, SERVICE_APPLY_NOW, _apply_now)
+    hass.services.async_register(DOMAIN, SERVICE_SET_MANUAL_OFF, _set_manual_off)
+    hass.services.async_register(DOMAIN, SERVICE_CLEAR_MANUAL_OFF, _clear_manual_off)

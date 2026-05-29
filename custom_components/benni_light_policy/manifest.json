@@ -1,0 +1,13 @@
+{
+  "domain": "benni_light_policy",
+  "name": "Benni Light Policy",
+  "version": "0.1.0",
+  "documentation": "https://github.com/Levtos/benni_light_policy",
+  "issue_tracker": "https://github.com/Levtos/benni_light_policy/issues",
+  "codeowners": ["@Levtos"],
+  "config_flow": true,
+  "iot_class": "calculated",
+  "integration_type": "service",
+  "dependencies": [],
+  "requirements": []
+}
