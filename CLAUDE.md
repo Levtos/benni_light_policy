@@ -20,15 +20,15 @@
 - **Wohnzimmer-Plan** (Entscheidungskette §4.1 komplett), Lux-Gate inkl. **TMC-Latch (R2)** + **Wetter-Dunkelheit (R10)**, Crossfade-Apply (R3/R3b) gated.
 - **Bereichs-Controller** in `areas.py`: **Flur (R14)** Tür/Bewegung+Timer+3x-Off, **Bad (R15)** 60-Min-Vergessensschutz+Vibrations-Reset, **Ring (R17)** Aqara via Activity-State (Preset-Namen OQ-1 → nur ring_mode-Sensor bis Map konfiguriert).
 - **Schlafzimmer-Bettgeh-Signal (R16)** edge-getriggert im Coordinator.
-- Sensoren: mode, scene_hash, brightness/cct_target, preset_enum, plan, ring_mode, debug; binary: lux_gate (`lights_allowed_combined`), apply_blocked, bedtime_signal.
-- **31 pure-logic-Tests** grün (decide-Kette, lux_gate/TMC/Wetter, bedtime/hallway-Prädikate, scene_hash).
+- **R12 Heimkommen:** coming_home unterdrückt presence_sim sofort + erzwingt Re-Apply.
+- **Manual-Off (R9):** `switch.lights_manual_off_living_room` — vom User per Switch Manager auf eine Taste legbar. Hold blockiert Apply, Auto-Reset bei sleep→awake, persistiert. (Bewusst KEINE Dimm-Diff-Auto-Detektion — unsere eigene Dynamic-Scene-Engine würde sonst Falschauslöser erzeugen.)
+- Sensoren: mode, scene_hash, brightness/cct_target, preset_enum, plan, ring_mode, debug; binary: lux_gate (`lights_allowed_combined`), apply_blocked, bedtime_signal; switch: manual_off.
+- **32 pure-logic-Tests** grün (decide-Kette inkl. coming_home, lux_gate/TMC/Wetter, bedtime/hallway-Prädikate, scene_hash).
 
 ## Noch offen
 
-- **R12 Heimkommen** (coming_home-Transition) — derzeit über presence_personal-Flip abgedeckt, kein expliziter Trigger.
-- **R13 Household-Auto-Off** mit 20s-Debounce — derzeit upstream über activity_state abgedeckt.
-- **Manual-Off via Dimm-Diff-Detektion** (CLAUDE-Pattern) — aktuell nur Hold via Service + sleep→awake-Reset (R9).
-- Timer-/Service-Pfade (areas.py, Apply) sind **nur in HA verifizierbar** (lokal kein HA/ruff).
+- **R13 Household-Auto-Off** mit 20s-Debounce — derzeit upstream über activity_state abgedeckt (Modus folgt activity_state direkt).
+- Timer-/Service-Pfade (areas.py, Apply, Switch) sind **nur in HA verifizierbar** (lokal kein HA/ruff).
 - Danach: Fork-/Authoring-Repo `benni_scene_presets` (siehe Memory).
 
 ---

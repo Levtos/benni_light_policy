@@ -19,6 +19,7 @@
           "overnight_away_entity": "Übernacht-Auswärts-Signal",
           "system_ready_entity": "System-Ready",
           "weather_entity": "Wetter (Icon für R10)",
+          "presence_transition_entity": "Präsenz-Transition (coming_home, R12)",
           "preset_catalog_entity": "Scene-Presets Katalog-Sensor",
           "group_main": "Lampengruppe Hauptgruppe",
           "group_ceiling": "Lampengruppe Deckenlampe (CCT)",

@@ -152,6 +152,16 @@ def test_presence_sim_suppressed_by_overnight_away():
     assert p.mode != C.MODE_PRESENCE_SIM
 
 
+def test_presence_sim_ends_on_coming_home():
+    # R12: coming_home beendet die Simulation sofort.
+    p = _decide(_ctx(
+        presence_personal=C.PRESENCE_AWAY, day_state="late_evening",
+        season=C.SEASON_SUMMER, activity_state=C.ACTIVITY_IDLE,
+        presence_transition=C.PRESENCE_TRANSITION_COMING_HOME,
+    ))
+    assert p.mode != C.MODE_PRESENCE_SIM
+
+
 def test_pc_overwatch():
     p = _decide(_ctx(activity_state=C.ACTIVITY_FREE_TIME, title_classifier=C.TITLE_OVERWATCH, day_state="early_night"))
     assert p.mode == C.MODE_PC_OVERWATCH

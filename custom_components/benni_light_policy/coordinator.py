@@ -55,6 +55,7 @@ from .const import (
     CONF_OVERNIGHT_AWAY,
     CONF_PRESENCE_HOUSEHOLD,
     CONF_PRESENCE_PERSONAL,
+    CONF_PRESENCE_TRANSITION,
     CONF_PRESET_CATALOG,
     CONF_SCENE_INTERVAL_SECONDS,
     CONF_SEASON,
@@ -71,6 +72,7 @@ from .const import (
     GROUP_CEILING,
     GROUP_MAIN,
     PHASE_EARLY_MORNING,
+    PRESENCE_TRANSITION_COMING_HOME,
     PRESET_BEDROOM_BEDTIME,
     SCENE_PRESETS_DOMAIN,
     TMC_FALLBACK_HOUR,
@@ -122,6 +124,7 @@ class LightPolicyCoordinator:
 
         self._tmc_set = False
         self._prev_day_state: str | None = None
+        self._prev_presence_transition: str | None = None
         self._lux_history: list[tuple[float, float]] = []  # (monotonic_ts, lux)
 
         self._last_plan: policy.Plan | None = None
@@ -181,6 +184,7 @@ class LightPolicyCoordinator:
         for key in (
             CONF_BIO_STATE, CONF_DAY_STATE, CONF_ACTIVITY_STATE, CONF_LUX,
             CONF_PRESENCE_PERSONAL, CONF_PRESENCE_HOUSEHOLD, CONF_GUEST,
+            CONF_PRESENCE_TRANSITION,
             CONF_SEASON, CONF_CALENDAR_THEME, CONF_TITLE_CLASSIFIER,
             CONF_ENTERTAINMENT_STABLE, CONF_OVERNIGHT_AWAY, CONF_SYSTEM_READY,
             CONF_WEATHER,
@@ -285,6 +289,7 @@ class LightPolicyCoordinator:
             title_classifier=self._read(CONF_TITLE_CLASSIFIER),
             entertainment_stable=_bool_state(self._read(CONF_ENTERTAINMENT_STABLE)),
             overnight_away=_bool_state(self._read(CONF_OVERNIGHT_AWAY)),
+            presence_transition=self._read(CONF_PRESENCE_TRANSITION),
             lux=_float_or_none(self._read(CONF_LUX)),
             weather=self._read(CONF_WEATHER),
         )
@@ -333,6 +338,15 @@ class LightPolicyCoordinator:
         if self._prev_bio == BIO_SLEEP and ctx.bio_state == BIO_AWAKE and self._manual_off:
             self._manual_off = False
         self._prev_bio = ctx.bio_state
+
+        # R12 Heimkommen: coming_home-Flanke erzwingt einen Re-Apply (last_plan reset),
+        # damit das Licht sofort sitzt, auch wenn presence_personal erst gleich umflippt.
+        if (
+            self._prev_presence_transition != PRESENCE_TRANSITION_COMING_HOME
+            and ctx.presence_transition == PRESENCE_TRANSITION_COMING_HOME
+        ):
+            self._last_plan = None
+        self._prev_presence_transition = ctx.presence_transition
 
         plan = policy.decide(
             ctx,

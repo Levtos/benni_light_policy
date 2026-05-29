@@ -46,6 +46,7 @@ from .const import (
     MODE_WORK_HOME,
     PRESENCE_SIM_PHASES,
     PRESENCE_SIM_TRIGGERS,
+    PRESENCE_TRANSITION_COMING_HOME,
     PRESET_PC_HEARTHSTONE,
     PRESET_PC_OVERWATCH,
     SEASON_WINTER,
@@ -86,6 +87,7 @@ class Context:
     title_classifier: str | None = None
     entertainment_stable: bool | None = None
     overnight_away: bool | None = None     # Benni übernachtet auswärts
+    presence_transition: str | None = None  # coming_home / leaving_home / none
     lux: float | None = None
     weather: str | None = None
     master_phase: str | None = None
@@ -300,10 +302,12 @@ def _decide_plan(ctx: Context, lux_gate_on: bool, profile: dict[str, int]) -> Pl
         )
 
     # 7) presence_sim — abwesend/bei_eltern in dunkler Phase, kein Übernacht-Signal.
+    #     R12: coming_home beendet die Simulation sofort (noch bevor presence_personal flippt).
     if (
         ctx.presence_personal in PRESENCE_SIM_TRIGGERS
         and awake_phase in PRESENCE_SIM_PHASES
         and not ctx.overnight_away
+        and ctx.presence_transition != PRESENCE_TRANSITION_COMING_HOME
     ):
         return Plan(
             mode=MODE_PRESENCE_SIM, preset_enum=_phase_preset(ctx, awake_phase),

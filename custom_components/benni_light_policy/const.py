@@ -85,6 +85,10 @@ PRESENCE_AWAY: Final = "abwesend"
 PRESENCE_PARENTS: Final = "bei_eltern"
 PRESENCE_SIM_TRIGGERS: Final = frozenset({PRESENCE_AWAY, PRESENCE_PARENTS})
 
+# Präsenz-Transition (R12 Heimkommen).
+PRESENCE_TRANSITION_COMING_HOME: Final = "coming_home"
+PRESENCE_TRANSITION_LEAVING: Final = "leaving_home"
+
 TITLE_OVERWATCH: Final = "1"
 TITLE_HEARTHSTONE: Final = "2"
 
@@ -113,6 +117,7 @@ CONF_ENTERTAINMENT_STABLE: Final = "entertainment_stable_entity"
 CONF_OVERNIGHT_AWAY: Final = "overnight_away_entity"
 CONF_SYSTEM_READY: Final = "system_ready_entity"
 CONF_WEATHER: Final = "weather_entity"
+CONF_PRESENCE_TRANSITION: Final = "presence_transition_entity"
 
 # Apply-Schicht.
 CONF_PRESET_CATALOG: Final = "preset_catalog_entity"   # sensor mit UUID-Lookup (Attribute)
@@ -228,6 +233,7 @@ UID_DEBUG: Final = "living_room_debug"
 UID_APPLY_BLOCKED: Final = "living_room_apply_blocked"
 UID_RING_MODE: Final = "ring_mode"
 UID_BEDTIME_SIGNAL: Final = "bedroom_bedtime_signal"
+UID_MANUAL_OFF: Final = "manual_off_living_room"
 
 # suggested_object_ids — kompatibel zur alten YAML-Welt wo Downstream-Module
 # (z.B. Rollo) auf den Namen zugreifen.
