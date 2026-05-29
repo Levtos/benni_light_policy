@@ -25,6 +25,12 @@
 - Sensoren: mode, scene_hash, brightness/cct_target, preset_enum, plan, ring_mode, debug; binary: lux_gate (`lights_allowed_combined`), apply_blocked, bedtime_signal; switch: manual_off.
 - **32 pure-logic-Tests** grün (decide-Kette inkl. coming_home, lux_gate/TMC/Wetter, bedtime/hallway-Prädikate, scene_hash).
 
+## UX / Config (2026-05-29)
+
+- **Mehrstufiger Config-Flow** (7 Kategorien, je ~5 Felder, Wording 1:1 Toolbox), Selektoren ungefiltert. Options-Flow als **Menü** (Kategorie einzeln editierbar).
+- **Ring = Mehrfach** (`ring_target_entities`) → simultane Status-Effekte auf alle Ringe (Wohnzimmer + Küche).
+- Shadow-Helfer: `switch.lights_apply_enabled` (Apply runtime-toggle), Lux-Gate-Internals im Debug-Sensor (`gate_internals()`), `diagnostics.py` (State-Dump-Download).
+
 ## Noch offen
 
 - **R13 Household-Auto-Off** mit 20s-Debounce — derzeit upstream über activity_state abgedeckt (Modus folgt activity_state direkt).

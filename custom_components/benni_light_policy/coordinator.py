@@ -64,10 +64,12 @@ from .const import (
     CONF_TITLE_CLASSIFIER,
     CONF_WEATHER,
     DEFAULT_APPLY_ENABLED,
+    DEFAULT_BRIGHTNESS,
     DEFAULT_CROSSFADE_SECONDS,
+    DEFAULT_LUX_THRESHOLDS,
     DEFAULT_SCENE_INTERVAL_SECONDS,
     DEFAULT_STARTUP_BLOCK_SECONDS,
-    DEFAULT_BRIGHTNESS,
+    SEASON_WINTER,
     GROUP_ALL,
     GROUP_CEILING,
     GROUP_MAIN,
@@ -134,6 +136,7 @@ class LightPolicyCoordinator:
         self._areas: list = []
         self._bedtime_active = False
         self._ring_mode: str | None = None
+        self._last_weather_dark = False
 
     # ----- options helpers -----
     @property
@@ -324,6 +327,7 @@ class LightPolicyCoordinator:
         ctx = self.build_context()
         self._update_tmc(ctx)
         weather_dark = self._weather_dark(ctx)
+        self._last_weather_dark = weather_dark
 
         gate = policy.lux_gate(
             ctx.lux, ctx.season, self._prev_lux_gate,
@@ -512,6 +516,12 @@ class LightPolicyCoordinator:
         self._manual_off = False
         await self.async_evaluate()
 
+    async def async_set_apply_enabled(self, value: bool) -> None:
+        """Apply zur Laufzeit an/aus (vom Apply-Switch). Schreibt in die Options →
+        Update-Listener lädt den Entry neu, der neue Coordinator liest den Wert."""
+        new_options = {**self.entry.options, CONF_APPLY_ENABLED: bool(value)}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+
     async def async_apply_simple_preset(
         self, preset_enum: str, entity_ids: list[str], *, brightness: int | None = None
     ) -> None:
@@ -556,6 +566,27 @@ class LightPolicyCoordinator:
     @property
     def ring_mode(self) -> str | None:
         return self._ring_mode
+
+    # ----- Lux-Gate-Internals (für Debug-Sensor + Diagnostics) -----
+    @property
+    def startup_ready(self) -> bool:
+        return self._startup_ready()
+
+    def gate_internals(self) -> dict[str, Any]:
+        season = self._read(CONF_SEASON)
+        thr = self._opt(CONF_LUX_THRESHOLDS) or DEFAULT_LUX_THRESHOLDS
+        dark, bright = thr.get(season or SEASON_WINTER, thr[SEASON_WINTER])
+        return {
+            "lux_gate_on": bool(self._prev_lux_gate),
+            "tmc_set": self._tmc_set,
+            "weather_dark": self._last_weather_dark,
+            "startup_ready": self._startup_ready(),
+            "season": season,
+            "thresholds": {"dark": dark, "bright": bright},
+            "lux_samples": len(self._lux_history),
+            "apply_enabled": self.apply_enabled,
+            "manual_off_active": self._manual_off,
+        }
 
     # ----- accessors -----
     @property
