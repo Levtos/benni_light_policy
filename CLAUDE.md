@@ -33,6 +33,8 @@
 
 ## Noch offen
 
+- **Lampengruppen → Atomic Light Groups in `benni_core_devices`** (Entscheidung 2026-05-29). **Gebaut:** bennis_toolbox PR #19 — `sensor.benni_light_group_<slug>` je Gruppe, Member im `entity_id`-Attribut, CRUD im Options-Flow. **Migration light_policy noch offen:** Gruppen-Felder von Multi-Light-Listen → EINE Gruppen-Entity je Gruppe + Member-Expansion (Light-Group `entity_id`-Attribut) für scene_presets. **Aktuell Stopgap:** Multi-Light-Listen direkt in light_policy (prefilled `GROUP_PREFILL`). Migration sobald PR #19 gemerged + Gruppen in HA angelegt.
+- **Scene-Presets-Katalog-Sensor existiert noch nicht** in HA (User hat Original bewusst nicht erzeugt, da Fork geplant). Apply bleibt bis dahin blockiert.
 - **R13 Household-Auto-Off** mit 20s-Debounce — derzeit upstream über activity_state abgedeckt (Modus folgt activity_state direkt).
 - Timer-/Service-Pfade (areas.py, Apply, Switch) sind **nur in HA verifizierbar** (lokal kein HA/ruff).
 - Danach: Fork-/Authoring-Repo `benni_scene_presets` (siehe Memory).
