@@ -22,6 +22,7 @@ from .const import (
     CONF_ACTIVITY_STATE,
     CONF_BATHROOM_LIGHT,
     CONF_BATHROOM_VIBRATION,
+    CONF_BATHROOM_TIMEOUT,
     CONF_HALLWAY_LIGHT,
     CONF_HALLWAY_TRIGGERS,
     CONF_RING_PRESET_MAP,
@@ -30,6 +31,9 @@ from .const import (
     HALLWAY_OFF_REPEAT_DELAY,
     HALLWAY_OFF_REPEATS,
     HALLWAY_TIMER_SECONDS,
+    SUBENTRY_BATHROOM,
+    SUBENTRY_HALLWAY,
+    SUBENTRY_NOTIFICATION_RING,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,9 +46,12 @@ def _is_on(state: str | None) -> bool:
 
 
 class _AreaBase:
-    def __init__(self, coord) -> None:
+    """Ein Controller pro Subentry. `data` = die Subentry-Config (nur eigene Felder)."""
+
+    def __init__(self, coord, data: dict) -> None:
         self.coord = coord
         self.hass = coord.hass
+        self._data = dict(data)
         self._unsub: list[CALLBACK_TYPE] = []
 
     @property
@@ -52,7 +59,7 @@ class _AreaBase:
         return self.coord.apply_enabled
 
     def opt(self, key, default=None):
-        return self.coord.get_option(key, default)
+        return self._data.get(key, default)
 
     def start(self) -> None:  # pragma: no cover - HA wiring
         raise NotImplementedError
@@ -66,8 +73,8 @@ class _AreaBase:
 class HallwayController(_AreaBase):
     """R14: Tür/Bewegung + draußen dunkel → Flurlicht an + 2-Min-Auto-Off."""
 
-    def __init__(self, coord) -> None:
-        super().__init__(coord)
+    def __init__(self, coord, data: dict) -> None:
+        super().__init__(coord, data)
         self._timer_unsub: CALLBACK_TYPE | None = None
         self._off_task: asyncio.Task | None = None
 
@@ -137,8 +144,8 @@ class HallwayController(_AreaBase):
 class BathroomController(_AreaBase):
     """R15: Badlicht an > 60 min ohne Klodeckel-Vibration → ausschalten."""
 
-    def __init__(self, coord) -> None:
-        super().__init__(coord)
+    def __init__(self, coord, data: dict) -> None:
+        super().__init__(coord, data)
         self._timer_unsub: CALLBACK_TYPE | None = None
 
     def start(self) -> None:
@@ -185,7 +192,8 @@ class BathroomController(_AreaBase):
                     )
                 )
 
-        self._timer_unsub = async_call_later(self.hass, BATHROOM_TIMEOUT_SECONDS, _fire)
+        timeout = int(self.opt(CONF_BATHROOM_TIMEOUT) or BATHROOM_TIMEOUT_SECONDS)
+        self._timer_unsub = async_call_later(self.hass, timeout, _fire)
 
     def _cancel_timer(self) -> None:
         if self._timer_unsub is not None:
@@ -205,9 +213,11 @@ class RingController(_AreaBase):
     """
 
     def start(self) -> None:
-        activity = self.opt(CONF_ACTIVITY_STATE)
+        # Activity-Quelle: Subentry-Override, sonst die des Hubs.
+        activity = self.opt(CONF_ACTIVITY_STATE) or self.coord.get_option(CONF_ACTIVITY_STATE)
         if not activity:
             return
+        self._activity = activity
         self._unsub.append(
             async_track_state_change_event(self.hass, [activity], self._on_activity)
         )
@@ -234,5 +244,18 @@ class RingController(_AreaBase):
         )
 
 
-def build_controllers(coord) -> list[_AreaBase]:
-    return [HallwayController(coord), BathroomController(coord), RingController(coord)]
+_CONTROLLER_BY_TYPE = {
+    SUBENTRY_HALLWAY: HallwayController,
+    SUBENTRY_BATHROOM: BathroomController,
+    SUBENTRY_NOTIFICATION_RING: RingController,
+}
+
+
+def build_controllers_from_subentries(coord, subentries) -> list[_AreaBase]:
+    """Pro passendem Subentry ein Controller mit dessen eigener Config."""
+    out: list[_AreaBase] = []
+    for sub in subentries:
+        cls = _CONTROLLER_BY_TYPE.get(sub.subentry_type)
+        if cls is not None:
+            out.append(cls(coord, dict(sub.data)))
+    return out
