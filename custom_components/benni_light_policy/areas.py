@@ -25,6 +25,7 @@ from .const import (
     CONF_BATHROOM_TIMEOUT,
     CONF_HALLWAY_LIGHT,
     CONF_HALLWAY_TRIGGERS,
+    CONF_MAPPINGS,
     CONF_RING_PRESET_MAP,
     CONF_RING_TARGETS,
     HALLWAY_COLOR_TEMP,
@@ -233,7 +234,9 @@ class RingController(_AreaBase):
         targets = self.opt(CONF_RING_TARGETS) or []
         if isinstance(targets, str):
             targets = [targets]
-        preset_map = self.opt(CONF_RING_PRESET_MAP) or {}
+        # Minihub-Mapping (activity_state-Wert → Aqara-Effekt-Name).
+        # Backward-Compat: alter CONF_RING_PRESET_MAP wird noch akzeptiert.
+        preset_map = self.opt(CONF_MAPPINGS) or self.opt(CONF_RING_PRESET_MAP) or {}
         effect = preset_map.get(new.state)
         if not (self.apply_enabled and targets and effect):
             return

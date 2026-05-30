@@ -238,39 +238,85 @@ def test_registry_kinds_are_core_only():
 
 
 def test_gaming_subentry_policy_wins_over_dayphase():
-    pol = P.make_gaming_policy("ow", {"ow": "games_overwatch_2"})
+    # Minihub: source_id="pc" + classifier_value="ow" + Mapping → Preset.
+    pol = P.make_gaming_policy("pc", "ow", {"ow": "games_overwatch_2"})
     p = _decide(
-        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night", season=C.SEASON_WINTER),
+        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night",
+             season=C.SEASON_WINTER, media_device="pc"),
         extra_policies=[pol],
     )
-    assert p.mode == "gaming:ow"
+    assert p.mode == "gaming:pc:ow"
     assert p.preset_enum == "games_overwatch_2"
 
 
-def test_gaming_subentry_inactive_when_value_unmapped():
-    pol = P.make_gaming_policy("something_else", {"ow": "games_overwatch_2"})
+def test_gaming_subentry_inactive_when_source_not_active():
+    # Gleiche Subentry, aber media_device zeigt nicht auf "pc" → kein Match.
+    pol = P.make_gaming_policy("pc", "ow", {"ow": "games_overwatch_2"})
     p = _decide(
-        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night", season=C.SEASON_WINTER),
+        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night",
+             season=C.SEASON_WINTER, media_device="none"),
         extra_policies=[pol],
     )
     assert p.mode == "early_night"  # Fallback
 
 
-def test_gaming_subentry_yields_to_higher_priority_core():
-    # work_home (Prio 5) schlägt gaming (Prio 9).
-    pol = P.make_gaming_policy("ow", {"ow": "games_overwatch_2"})
+def test_gaming_subentry_inactive_when_value_unmapped():
+    # PC ist aktive Quelle, aber Classifier-Wert nicht im Mapping → kein Match.
+    pol = P.make_gaming_policy("pc", "something_else", {"ow": "games_overwatch_2"})
     p = _decide(
-        _ctx(activity_state=C.ACTIVITY_WORK_HOME, day_state="early_night"),
+        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night",
+             season=C.SEASON_WINTER, media_device="pc"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "early_night"
+
+
+def test_gaming_subentry_yields_to_higher_priority_core():
+    # work_home (Prio 5) schlägt gaming (Prio 9) — auch wenn PC aktiv ist.
+    pol = P.make_gaming_policy("pc", "ow", {"ow": "games_overwatch_2"})
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_WORK_HOME, day_state="early_night",
+             media_device="pc"),
         extra_policies=[pol],
     )
     assert p.mode == C.MODE_WORK_HOME
 
 
-def test_music_subentry_requires_birthday():
-    pol = P.make_music_policy("party", frozenset({"party"}), "disco")
+def test_multi_source_priority_ps5_beats_pc():
+    # Beide Subentries existieren, PS5 hat höhere Prio. media_device steht aber
+    # nur auf einer Quelle gleichzeitig — der Test prüft Co-Existenz + dass nur
+    # die aktive Quelle matched (kein Crosstalk).
+    pc_pol = P.make_gaming_policy("pc", "0", {"0": "uuid-prod"}, priority=12)
+    ps5_pol = P.make_gaming_policy("ps5", "0", {"0": "uuid-ps5"}, priority=9)
+    # PS5 aktiv → PS5-Plan, PC-Subentry inaktiv weil media_device=ps5
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="early_night",
+             season=C.SEASON_WINTER, media_device="ps5"),
+        extra_policies=[pc_pol, ps5_pol],
+    )
+    assert p.preset_enum == "uuid-ps5"
+
+
+def test_music_subentry_minihub():
+    pol = P.make_music_policy("party", {"party": "disco-uuid", "rock": "rock-uuid"})
     base = dict(activity_state=C.ACTIVITY_IDLE, day_state="late_evening")
-    assert _decide(_ctx(calendar_theme="geburtstag", **base), extra_policies=[pol]).mode == C.MODE_MUSIC_PARTY
+    # Birthday + Match → music_party.
+    plan = _decide(_ctx(calendar_theme="geburtstag", **base), extra_policies=[pol])
+    assert plan.mode == C.MODE_MUSIC_PARTY
+    assert plan.preset_enum == "disco-uuid"
+    # Ohne Birthday → Music inaktiv.
     assert _decide(_ctx(**base), extra_policies=[pol]).mode != C.MODE_MUSIC_PARTY
+
+
+def test_cinema_requires_tv_media_context():
+    base = dict(entertainment_stable=True, activity_state=C.ACTIVITY_FREE_TIME,
+                day_state="late_evening")
+    # TV → Cinema feuert.
+    assert _decide(_ctx(media_context="tv", **base)).mode == C.MODE_CINEMA
+    # Gaming-Kontext (PC an, kein Spiel) → kein Cinema mehr.
+    assert _decide(_ctx(media_context="gaming", **base)).mode != C.MODE_CINEMA
+    # media_context unkonfiguriert (None) → Backward-Compat, alte Regel feuert.
+    assert _decide(_ctx(**base)).mode == C.MODE_CINEMA
 
 
 def test_dayphase_policy_is_terminal():

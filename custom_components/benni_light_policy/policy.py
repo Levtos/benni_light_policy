@@ -53,6 +53,7 @@ from .const import (
     SEASON_WINTER,
     TITLE_HEARTHSTONE,
     TITLE_OVERWATCH,
+    TV_MEDIA_CONTEXTS,
     WEATHER_DARK_DROP_RATIO,
     WEATHER_DARK_ICONS,
 )
@@ -92,6 +93,9 @@ class Context:
     lux: float | None = None
     weather: str | None = None
     master_phase: str | None = None
+    # Spider-Web: aus benni_media_context — kein eigenes Power-/Source-Tracking.
+    media_device: str | None = None         # "pc"/"ps5"/"nintendo"/"tv"/"none"
+    media_context: str | None = None        # "gaming"/"tv"/"streaming"/"private_time"/"idle"
 
 
 @dataclass
@@ -343,12 +347,17 @@ def _eval_presence_sim(ctx: Context, gate: bool, profile: dict[str, int]) -> Pla
 
 
 def _eval_cinema(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    """Cinema = TV-Watching. Spec-Tightening: media_context muss TV-artig sein,
+    sonst feuert das für jedes Entertainment (z.B. Gaming am PC). Wenn der Hub
+    media_context nicht verdrahtet hat (None): Backward-Compat — wie alte Regel."""
     if not (ctx.entertainment_stable and not ctx.guest):
+        return None
+    if ctx.media_context is not None and ctx.media_context not in TV_MEDIA_CONTEXTS:
         return None
     return Plan(
         mode=MODE_CINEMA, preset_enum=MODE_CINEMA, brightness=None, color_temp=None,
         apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], exclusive_off=[GROUP_CEILING],
-        lux_gate_on=gate, reason="cinema: entertainment_stable on, kein Gast",
+        lux_gate_on=gate, reason=f"cinema: entertainment+TV (media_context={ctx.media_context})",
     )
 
 
@@ -381,9 +390,9 @@ PRIO_WORK_HOME = 5
 PRIO_HOUSEHOLD = 6
 PRIO_PRESENCE_SIM = 7
 PRIO_MUSIC_PARTY = 8
-PRIO_GAMING = 9
-PRIO_CINEMA = 11
-PRIO_DAYPHASE = 12
+PRIO_GAMING = 9     # default Gaming-Priorität, pro Subentry per source_priority überschreibbar
+PRIO_CINEMA = 11    # zwischen Nintendo (10) und PC (12) per alter Logik
+PRIO_DAYPHASE = 13  # absoluter Fallback (verschoben von 12 wg. PC-Gaming auf 12)
 
 # Kern-Policies: immer vorhanden, brauchen nur Foundation + Lampengruppen (Hub).
 # gaming/music_party sind NICHT im Kern — sie werden per Subentry beigesteuert
@@ -403,55 +412,64 @@ LIVING_ROOM_POLICIES: tuple[PolicyDef, ...] = (
 POLICY_KINDS: tuple[str, ...] = tuple(p.kind for p in LIVING_ROOM_POLICIES)
 
 
-# --- Subentry-beigesteuerte Policies (typisiert, mit eigener Config) ----------
+# --- Subentry-Minihubs (Policy-Kategorie mit interner Mapping-Tabelle) -----------
 def make_gaming_policy(
+    source_id: str,
     classifier_value: str | None,
-    mapping: dict[str, str],
+    mappings: dict[str, str],
     *,
     priority: int = PRIO_GAMING,
     target: str = GROUP_MAIN,
 ) -> PolicyDef:
-    """Gaming-Subentry: eigener Title-Classifier-Wert → Preset (free_time/idle)."""
+    """Gaming-Minihub: eine Subentry pro Quelle (PC, PS5, Nintendo …).
+    Gate: media_device == source_id (Source ist aktiv) + activity in free/idle.
+    Mapping classifier_value → preset_uuid. Mehrere Quellen gleichzeitig:
+    Konflikt wird über priority gelöst (PS5=9 < Nintendo=10 < Cinema=11 < PC=12).
+    """
 
     def _ev(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+        if ctx.media_device != source_id:
+            return None
         if ctx.activity_state not in ACTIVITY_PRESET_DRIVING:
             return None
-        preset = mapping.get(classifier_value or "")
+        preset = mappings.get(classifier_value or "")
         if not preset:
             return None
         return Plan(
-            mode=f"gaming:{classifier_value}", preset_enum=preset,
+            mode=f"gaming:{source_id}:{classifier_value}", preset_enum=preset,
             brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
             targets=[target], lux_gate_on=gate,
-            reason=f"gaming: classifier={classifier_value} → {preset}",
+            reason=f"gaming:{source_id}: classifier={classifier_value} → {preset}",
         )
 
-    return PolicyDef("gaming", priority, _ev)
+    return PolicyDef(f"gaming_{source_id}", priority, _ev)
 
 
 def make_music_policy(
     classifier_value: str | None,
-    trigger_values: frozenset[str],
-    preset_enum: str,
+    mappings: dict[str, str],
     *,
     require_birthday: bool = True,
-    calendar_theme: str | None = None,
     priority: int = PRIO_MUSIC_PARTY,
     target: str = GROUP_MAIN,
 ) -> PolicyDef:
-    """Musik-Party-Subentry: Musik-Classifier-Wert (+ optional Geburtstag) → Disco-Preset."""
+    """Musik-Minihub: classifier_value → preset_uuid (optional Geburtstag-Gate).
+    Strukturgleich zum Gaming-Minihub, ohne source_id (Musik-Quelle ist
+    typischerweise singulär; bei Bedarf später erweiterbar)."""
 
     def _ev(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
         if ctx.activity_state not in ACTIVITY_PRESET_DRIVING:
             return None
         if require_birthday and (ctx.calendar_theme or "").lower() != "geburtstag":
             return None
-        if classifier_value not in trigger_values:
+        preset = mappings.get(classifier_value or "")
+        if not preset:
             return None
         return Plan(
-            mode=MODE_MUSIC_PARTY, preset_enum=preset_enum,
+            mode=MODE_MUSIC_PARTY, preset_enum=preset,
             brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
-            targets=[target], lux_gate_on=gate, reason="music_party",
+            targets=[target], lux_gate_on=gate,
+            reason=f"music: classifier={classifier_value} → {preset}",
         )
 
     return PolicyDef("music_party", priority, _ev)

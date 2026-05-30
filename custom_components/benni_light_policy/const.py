@@ -118,6 +118,10 @@ CONF_OVERNIGHT_AWAY: Final = "overnight_away_entity"
 CONF_SYSTEM_READY: Final = "system_ready_entity"
 CONF_WEATHER: Final = "weather_entity"
 CONF_PRESENCE_TRANSITION: Final = "presence_transition_entity"
+# Spider-web-Konsum aus benni_media_context: welche Quelle ist aktiv (pc/ps5/…)
+# und in welchem Modus (gaming/tv/streaming/…). Lebt im Hub, einmal verdrahtet.
+CONF_MEDIA_DEVICE: Final = "media_device_entity"
+CONF_MEDIA_CONTEXT: Final = "media_context_entity"
 
 # Apply-Schicht.
 CONF_PRESET_CATALOG: Final = "preset_catalog_entity"   # sensor mit UUID-Lookup (Attribute)
@@ -151,13 +155,32 @@ SUBENTRY_TYPES: Final = (
 
 # Generische Subentry-Config-Keys (je Subentry nur seine eigenen Felder).
 CONF_CLASSIFIER_ENTITY: Final = "classifier_entity"   # Gaming/Musik: eigener Title-Classifier
-CONF_TRIGGER_VALUE: Final = "trigger_value"           # Wert, der die Policy auslöst
-CONF_PRESET_ENUM: Final = "preset_enum"               # Ziel-Preset-Schlüssel
+CONF_TRIGGER_VALUE: Final = "trigger_value"           # (legacy, einzeln) — ersetzt durch CONF_MAPPINGS
+CONF_PRESET_ENUM: Final = "preset_enum"               # (legacy, einzeln) — ersetzt durch CONF_MAPPINGS
 CONF_REQUIRE_BIRTHDAY: Final = "require_birthday"      # Musik: nur bei Kalender-Thema geburtstag
 CONF_BATHROOM_TIMEOUT: Final = "bathroom_timeout_seconds"
-# Wake-Up-Lampen (R6): vom Wake-Planner via bio_state=waking ausgelöst.
-# Multi-Light — typischerweise „alles außer Küche" (mehrere Räume erlaubt).
 CONF_WAKE_UP_TARGETS: Final = "wake_up_targets"
+# Minihub-Schema: ein Subentry = eine Policy-Kategorie mit interner Mapping-Tabelle.
+CONF_SOURCE_ID: Final = "source_id"                   # z.B. "pc"/"ps5" — matched media_device
+CONF_SOURCE_PRIORITY: Final = "source_priority"        # numerisch, kleiner = höher
+CONF_MAPPINGS: Final = "mappings"                      # dict {classifier_value: preset_uuid}
+
+# Mapping-Slots im Config-Flow (statisches Schema → feste Anzahl Slots).
+MAPPING_SLOT_COUNT: Final = 8
+MAPPING_VALUE_PREFIX: Final = "mapping_value_"
+MAPPING_PRESET_PREFIX: Final = "mapping_preset_"
+
+# Default-Prioritäten pro Quelle (alte Logik: PS5 > Nintendo > Cinema > PC).
+GAMING_DEFAULT_PRIORITY: Final[dict[str, int]] = {
+    "ps5": 9,
+    "nintendo": 10,
+    "pc": 12,
+    # andere Quellen → 11 (gleich/zwischen Cinema), per Subentry editierbar
+}
+
+# Cinema feuert nur, wenn media_context auf TV-artige Kontexte zeigt
+# (Spec-Tightening: §4.1 sagt nur entertainment_stable, das war zu lose).
+TV_MEDIA_CONTEXTS: Final = frozenset({"tv", "streaming"})
 
 # Toolbox-Auto-Prefill: Hub-Foundation-Felder werden mit den bekannten
 # Singleton-Entity-IDs der Benni-Toolbox vorbelegt (falls vorhanden) — der User
@@ -175,6 +198,8 @@ ENTITY_PREFILL: Final[dict[str, str]] = {
     CONF_CALENDAR_THEME: "sensor.benni_context_day_context",
     CONF_LUX: "sensor.garden_illuminance_atomic",
     CONF_ENTERTAINMENT_STABLE: "binary_sensor.benni_media_context_entertainment_active",
+    CONF_MEDIA_DEVICE: "sensor.benni_media_context_media_device",
+    CONF_MEDIA_CONTEXT: "sensor.benni_media_context_media_context",
     CONF_SYSTEM_READY: "binary_sensor.system_benni_context_ready",
     CONF_SEASON: "sensor.weather_season_meteorological_atomic",
 }

@@ -55,8 +55,16 @@ from .const import (
     CONF_SEASON,
     CONF_STARTUP_BLOCK_SECONDS,
     CONF_SYSTEM_READY,
+    CONF_MAPPINGS,
+    CONF_MEDIA_CONTEXT,
+    CONF_MEDIA_DEVICE,
+    CONF_SOURCE_ID,
+    CONF_SOURCE_PRIORITY,
     CONF_TRIGGER_VALUE,
     CONF_WAKE_UP_TARGETS,
+    MAPPING_PRESET_PREFIX,
+    MAPPING_SLOT_COUNT,
+    MAPPING_VALUE_PREFIX,
     CONF_WEATHER,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_CROSSFADE_SECONDS,
@@ -93,14 +101,17 @@ SELECTORS: dict[str, Any] = {
     CONF_PRESENCE_PERSONAL: _ENTITY, CONF_PRESENCE_HOUSEHOLD: _ENTITY,
     CONF_LUX: _ENTITY, CONF_WEATHER: _ENTITY, CONF_SEASON: _ENTITY,
     CONF_CALENDAR_THEME: _ENTITY, CONF_ENTERTAINMENT_STABLE: _ENTITY,
+    CONF_MEDIA_DEVICE: _ENTITY, CONF_MEDIA_CONTEXT: _ENTITY,
     CONF_GUEST: _ENTITY, CONF_PRESENCE_TRANSITION: _ENTITY,
     CONF_OVERNIGHT_AWAY: _ENTITY, CONF_SYSTEM_READY: _ENTITY,
     CONF_GROUP_MAIN: _LIGHTS, CONF_GROUP_CEILING: _LIGHTS, CONF_GROUP_ALL: _LIGHTS,
     CONF_PRESET_CATALOG: _ENTITY,
     CONF_APPLY_ENABLED: _BOOL, CONF_STARTUP_BLOCK_SECONDS: _INT,
     CONF_CROSSFADE_SECONDS: _INT, CONF_SCENE_INTERVAL_SECONDS: _INT,
-    # Subentry-Felder
-    CONF_CLASSIFIER_ENTITY: _ENTITY, CONF_TRIGGER_VALUE: _TEXT, CONF_PRESET_ENUM: _TEXT,
+    # Subentry-Felder (Minihub-Schema)
+    CONF_CLASSIFIER_ENTITY: _ENTITY,
+    CONF_SOURCE_ID: _TEXT, CONF_SOURCE_PRIORITY: _INT,
+    CONF_TRIGGER_VALUE: _TEXT, CONF_PRESET_ENUM: _TEXT,
     CONF_REQUIRE_BIRTHDAY: _BOOL, CONF_RING_TARGETS: _LIGHTS,
     CONF_HALLWAY_LIGHT: _LIGHT, CONF_HALLWAY_TRIGGERS: _ENTITIES,
     CONF_BATHROOM_LIGHT: _LIGHT_OR_SWITCH, CONF_BATHROOM_VIBRATION: _ENTITY, CONF_BATHROOM_TIMEOUT: _INT,
@@ -119,7 +130,8 @@ BOOL_KEYS = {CONF_APPLY_ENABLED, CONF_REQUIRE_BIRTHDAY}
 STEP_CONTEXT = (CONF_BIO_STATE, CONF_ACTIVITY_STATE, CONF_DAY_STATE,
                 CONF_PRESENCE_PERSONAL, CONF_PRESENCE_HOUSEHOLD)
 STEP_ENVIRONMENT = (CONF_LUX, CONF_WEATHER, CONF_SEASON,
-                    CONF_CALENDAR_THEME, CONF_ENTERTAINMENT_STABLE)
+                    CONF_CALENDAR_THEME, CONF_ENTERTAINMENT_STABLE,
+                    CONF_MEDIA_DEVICE, CONF_MEDIA_CONTEXT)
 STEP_SIGNALS = (CONF_GUEST, CONF_PRESENCE_TRANSITION, CONF_OVERNIGHT_AWAY, CONF_SYSTEM_READY)
 STEP_LAMPS = (CONF_GROUP_MAIN, CONF_GROUP_CEILING, CONF_GROUP_ALL, CONF_PRESET_CATALOG)
 STEP_OPTIONS = (CONF_APPLY_ENABLED, CONF_STARTUP_BLOCK_SECONDS,
@@ -133,14 +145,19 @@ HUB_STEP_KEYS: dict[str, tuple[str, ...]] = {
 
 # --- Subentry-Felder pro Typ ---
 SUBENTRY_FIELDS: dict[str, tuple[str, ...]] = {
-    SUBENTRY_GAMING: (CONF_CLASSIFIER_ENTITY, CONF_TRIGGER_VALUE, CONF_PRESET_ENUM),
-    SUBENTRY_MUSIC: (CONF_CLASSIFIER_ENTITY, CONF_TRIGGER_VALUE, CONF_PRESET_ENUM,
-                     CONF_REQUIRE_BIRTHDAY),
+    # Minihubs (haben zusätzlich Mapping-Slots — siehe SUBENTRY_HAS_MAPPINGS)
+    SUBENTRY_GAMING: (CONF_SOURCE_ID, CONF_SOURCE_PRIORITY, CONF_CLASSIFIER_ENTITY),
+    SUBENTRY_MUSIC: (CONF_CLASSIFIER_ENTITY, CONF_REQUIRE_BIRTHDAY),
     SUBENTRY_NOTIFICATION_RING: (CONF_RING_TARGETS, CONF_ACTIVITY_STATE),
+    # Single-Rule
     SUBENTRY_HALLWAY: (CONF_HALLWAY_LIGHT, CONF_HALLWAY_TRIGGERS),
     SUBENTRY_BATHROOM: (CONF_BATHROOM_LIGHT, CONF_BATHROOM_VIBRATION, CONF_BATHROOM_TIMEOUT),
     SUBENTRY_WAKE_UP: (CONF_WAKE_UP_TARGETS,),
 }
+# Subentry-Typen mit interner Mapping-Tabelle (classifier/activity → preset/effect).
+SUBENTRY_HAS_MAPPINGS: frozenset[str] = frozenset({
+    SUBENTRY_GAMING, SUBENTRY_MUSIC, SUBENTRY_NOTIFICATION_RING,
+})
 SUBENTRY_DEFAULT_TITLE: dict[str, str] = {
     SUBENTRY_GAMING: "Gaming", SUBENTRY_MUSIC: "Musik-Party",
     SUBENTRY_NOTIFICATION_RING: "Notification RGB", SUBENTRY_HALLWAY: "Flur",
@@ -288,6 +305,38 @@ class LightPolicyOptionsFlow(OptionsFlow):
 # kein Verlass auf HA-interne Typ-Attribute). v1: nur Anlegen; zum Ändern
 # Subentry löschen + neu anlegen (Reconfigure folgt später).
 # --------------------------------------------------------------------------- #
+def _slot_keys(i: int) -> tuple[str, str]:
+    return f"{MAPPING_VALUE_PREFIX}{i}", f"{MAPPING_PRESET_PREFIX}{i}"
+
+
+def _pack_mappings(user_input: dict[str, Any]) -> dict[str, str]:
+    """Zieht die N (value/preset)-Slot-Paare aus dem Form-Input und packt sie
+    in ein {classifier_value: preset_uuid}-Dict. Leere Slots werden ignoriert.
+    Entfernt die Slot-Keys aus user_input (in-place)."""
+    packed: dict[str, str] = {}
+    for i in range(MAPPING_SLOT_COUNT):
+        vkey, pkey = _slot_keys(i)
+        v = user_input.pop(vkey, None)
+        p = user_input.pop(pkey, None)
+        if v in (None, "") or p in (None, ""):
+            continue
+        packed[str(v).strip()] = str(p).strip()
+    return packed
+
+
+def _unpack_mappings(defaults: dict[str, Any]) -> None:
+    """Spielt ein vorhandenes mappings-Dict aus defaults in die Slot-Felder
+    zurück (für Reconfigure/Edit)."""
+    mappings = defaults.get(CONF_MAPPINGS) or {}
+    if not isinstance(mappings, dict):
+        return
+    items = list(mappings.items())[:MAPPING_SLOT_COUNT]
+    for i, (v, p) in enumerate(items):
+        vkey, pkey = _slot_keys(i)
+        defaults.setdefault(vkey, v)
+        defaults.setdefault(pkey, p)
+
+
 class _BasePolicySubentryFlow(ConfigSubentryFlow):
     policy_type: str = ""
 
@@ -295,6 +344,8 @@ class _BasePolicySubentryFlow(ConfigSubentryFlow):
         stype = self.policy_type
         if user_input is not None:
             title = user_input.pop("name", None) or SUBENTRY_DEFAULT_TITLE.get(stype, stype)
+            if stype in SUBENTRY_HAS_MAPPINGS:
+                user_input[CONF_MAPPINGS] = _pack_mappings(user_input)
             return self.async_create_entry(title=title, data=user_input)
 
         defaults: dict[str, Any] = {}
@@ -305,11 +356,18 @@ class _BasePolicySubentryFlow(ConfigSubentryFlow):
             cand = SUBENTRY_PREFILL.get(key)
             if cand and key not in defaults and _exists(self.hass, cand):
                 defaults[key] = cand
+        if stype in SUBENTRY_HAS_MAPPINGS:
+            _unpack_mappings(defaults)
         fields: dict[Any, Any] = {
             vol.Optional("name", default=SUBENTRY_DEFAULT_TITLE.get(stype, stype)): _TEXT
         }
         for key in SUBENTRY_FIELDS[stype]:
             fields[_marker(key, defaults)] = SELECTORS[key]
+        if stype in SUBENTRY_HAS_MAPPINGS:
+            for i in range(MAPPING_SLOT_COUNT):
+                vkey, pkey = _slot_keys(i)
+                fields[_marker(vkey, defaults)] = _TEXT
+                fields[_marker(pkey, defaults)] = _TEXT
         return self.async_show_form(step_id="user", data_schema=vol.Schema(fields))
 
 

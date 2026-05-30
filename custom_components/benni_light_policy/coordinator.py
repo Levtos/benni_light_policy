@@ -62,9 +62,15 @@ from .const import (
     CONF_STARTUP_BLOCK_SECONDS,
     CONF_SYSTEM_READY,
     CONF_TITLE_CLASSIFIER,
+    CONF_MAPPINGS,
+    CONF_MEDIA_CONTEXT,
+    CONF_MEDIA_DEVICE,
+    CONF_SOURCE_ID,
+    CONF_SOURCE_PRIORITY,
     CONF_TRIGGER_VALUE,
     CONF_WAKE_UP_TARGETS,
     CONF_WEATHER,
+    GAMING_DEFAULT_PRIORITY,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_BRIGHTNESS,
     DEFAULT_CROSSFADE_SECONDS,
@@ -192,7 +198,8 @@ class LightPolicyCoordinator:
             CONF_PRESENCE_PERSONAL, CONF_PRESENCE_HOUSEHOLD, CONF_GUEST,
             CONF_PRESENCE_TRANSITION,
             CONF_SEASON, CONF_CALENDAR_THEME,
-            CONF_ENTERTAINMENT_STABLE, CONF_OVERNIGHT_AWAY, CONF_SYSTEM_READY,
+            CONF_ENTERTAINMENT_STABLE, CONF_MEDIA_DEVICE, CONF_MEDIA_CONTEXT,
+            CONF_OVERNIGHT_AWAY, CONF_SYSTEM_READY,
             CONF_WEATHER,
             CONF_GROUP_MAIN, CONF_GROUP_CEILING, CONF_GROUP_ALL,
         ):
@@ -295,6 +302,8 @@ class LightPolicyCoordinator:
             calendar_theme=self._read(CONF_CALENDAR_THEME),
             title_classifier=self._read(CONF_TITLE_CLASSIFIER),
             entertainment_stable=_bool_state(self._read(CONF_ENTERTAINMENT_STABLE)),
+            media_device=self._read(CONF_MEDIA_DEVICE),
+            media_context=self._read(CONF_MEDIA_CONTEXT),
             overnight_away=_bool_state(self._read(CONF_OVERNIGHT_AWAY)),
             presence_transition=self._read(CONF_PRESENCE_TRANSITION),
             lux=_float_or_none(self._read(CONF_LUX)),
@@ -397,16 +406,23 @@ class LightPolicyCoordinator:
                     if isinstance(eid, str) and eid and eid not in wake_up_targets:
                         wake_up_targets.append(eid)
                 continue
-            trig = d.get(CONF_TRIGGER_VALUE)
-            preset = d.get(CONF_PRESET_ENUM)
-            if not (trig and preset):
+            # Minihub: mappings = dict {classifier_value (str) → preset_uuid (str)}
+            mappings = d.get(CONF_MAPPINGS) or {}
+            if not isinstance(mappings, dict) or not mappings:
                 continue
             value = self._read_entity(d.get(CONF_CLASSIFIER_ENTITY))
             if sub.subentry_type == SUBENTRY_GAMING:
-                out.append(policy.make_gaming_policy(value, {trig: preset}))
+                source_id = (d.get(CONF_SOURCE_ID) or "").strip().lower()
+                if not source_id:
+                    continue
+                priority = int(d.get(CONF_SOURCE_PRIORITY)
+                               or GAMING_DEFAULT_PRIORITY.get(source_id, policy.PRIO_GAMING))
+                out.append(policy.make_gaming_policy(
+                    source_id, value, mappings, priority=priority,
+                ))
             elif sub.subentry_type == SUBENTRY_MUSIC:
                 out.append(policy.make_music_policy(
-                    value, frozenset({trig}), preset,
+                    value, mappings,
                     require_birthday=bool(d.get(CONF_REQUIRE_BIRTHDAY, True)),
                 ))
         if wake_up_targets:

@@ -19,7 +19,9 @@
           "weather_entity": "Wetter (Icon, R10)",
           "season_entity": "Jahreszeit",
           "calendar_theme_entity": "Kalender-Thema / Day Context",
-          "entertainment_stable_entity": "Entertainment Active"
+          "entertainment_stable_entity": "Entertainment Active",
+          "media_device_entity": "Media Device (PC / PS5 / TV …)",
+          "media_context_entity": "Media Context (idle / tv / streaming / gaming / …)"
         }
       },
       "signals": {
@@ -84,7 +86,9 @@
           "weather_entity": "Wetter (Icon, R10)",
           "season_entity": "Jahreszeit",
           "calendar_theme_entity": "Kalender-Thema / Day Context",
-          "entertainment_stable_entity": "Entertainment Active"
+          "entertainment_stable_entity": "Entertainment Active",
+          "media_device_entity": "Media Device (PC / PS5 / TV …)",
+          "media_context_entity": "Media Context (idle / tv / streaming / gaming / …)"
         }
       },
       "signals": {
@@ -119,47 +123,94 @@
   "config_subentries": {
     "gaming": {
       "initiate_flow": { "user": "Gaming-Policy hinzufügen" },
-      "entry_type": "Gaming-Policy",
+      "entry_type": "Gaming-Policy (Minihub pro Quelle)",
       "step": {
         "user": {
-          "title": "Gaming-Policy",
-          "description": "Eigener Title-Classifier → Scene-Preset (nur bei Activity free_time/idle).",
+          "title": "Gaming-Minihub (z.B. PC / PS5 / Nintendo)",
+          "description": "Eine Subentry pro Quelle. Hub liest media_device (aus benni_media_context) → matched gegen source_id. Pro Quelle bis zu 8 Enum-Werte → Scene-Preset-UUIDs. Konflikt bei mehreren aktiven Quellen wird über source_priority gelöst (kleiner = höher; PS5=9, Nintendo=10, Cinema=11, PC=12).",
           "data": {
-            "name": "Name",
-            "classifier_entity": "Title-Classifier (Spiele-Quelle, z.B. PC)",
-            "trigger_value": "Auslöse-Wert (Classifier-Enum, z.B. 1)",
-            "preset_enum": "Scene-Preset-UUID"
+            "name": "Name (z.B. „Gaming PC“)",
+            "source_id": "Source-ID (matched media_device: pc / ps5 / nintendo)",
+            "source_priority": "Priorität (leer = Default je Source; sonst Zahl, kleiner = höher)",
+            "classifier_entity": "Title-Classifier-Entity (Enum 0/1/2/…)",
+            "mapping_value_0": "Slot 1 · Enum-Wert (z.B. 0)",
+            "mapping_preset_0": "Slot 1 · Scene-Preset-UUID",
+            "mapping_value_1": "Slot 2 · Enum-Wert",
+            "mapping_preset_1": "Slot 2 · Scene-Preset-UUID",
+            "mapping_value_2": "Slot 3 · Enum-Wert",
+            "mapping_preset_2": "Slot 3 · Scene-Preset-UUID",
+            "mapping_value_3": "Slot 4 · Enum-Wert",
+            "mapping_preset_3": "Slot 4 · Scene-Preset-UUID",
+            "mapping_value_4": "Slot 5 · Enum-Wert",
+            "mapping_preset_4": "Slot 5 · Scene-Preset-UUID",
+            "mapping_value_5": "Slot 6 · Enum-Wert",
+            "mapping_preset_5": "Slot 6 · Scene-Preset-UUID",
+            "mapping_value_6": "Slot 7 · Enum-Wert",
+            "mapping_preset_6": "Slot 7 · Scene-Preset-UUID",
+            "mapping_value_7": "Slot 8 · Enum-Wert",
+            "mapping_preset_7": "Slot 8 · Scene-Preset-UUID"
           }
         }
       }
     },
     "music": {
       "initiate_flow": { "user": "Musik-Party-Policy hinzufügen" },
-      "entry_type": "Musik-Party-Policy",
+      "entry_type": "Musik-Party-Minihub",
       "step": {
         "user": {
-          "title": "Musik-Party-Policy",
+          "title": "Musik-Party-Minihub",
+          "description": "Musik-Classifier liefert N Werte → eigene Scene-Preset-UUID pro Wert. Optional nur bei Kalender-Thema „geburtstag“.",
           "data": {
             "name": "Name",
-            "classifier_entity": "Title-Classifier (Musik-Quelle)",
-            "trigger_value": "Auslöse-Wert (Classifier-Enum, z.B. 2)",
-            "preset_enum": "Scene-Preset-UUID (Disco)",
-            "require_birthday": "Nur bei Kalender-Thema „geburtstag“"
+            "classifier_entity": "Title-Classifier-Entity (Musik-Quelle)",
+            "require_birthday": "Nur bei Kalender-Thema „geburtstag“",
+            "mapping_value_0": "Slot 1 · Classifier-Wert",
+            "mapping_preset_0": "Slot 1 · Scene-Preset-UUID",
+            "mapping_value_1": "Slot 2 · Classifier-Wert",
+            "mapping_preset_1": "Slot 2 · Scene-Preset-UUID",
+            "mapping_value_2": "Slot 3 · Classifier-Wert",
+            "mapping_preset_2": "Slot 3 · Scene-Preset-UUID",
+            "mapping_value_3": "Slot 4 · Classifier-Wert",
+            "mapping_preset_3": "Slot 4 · Scene-Preset-UUID",
+            "mapping_value_4": "Slot 5 · Classifier-Wert",
+            "mapping_preset_4": "Slot 5 · Scene-Preset-UUID",
+            "mapping_value_5": "Slot 6 · Classifier-Wert",
+            "mapping_preset_5": "Slot 6 · Scene-Preset-UUID",
+            "mapping_value_6": "Slot 7 · Classifier-Wert",
+            "mapping_preset_6": "Slot 7 · Scene-Preset-UUID",
+            "mapping_value_7": "Slot 8 · Classifier-Wert",
+            "mapping_preset_7": "Slot 8 · Scene-Preset-UUID"
           }
         }
       }
     },
     "notification_ring": {
       "initiate_flow": { "user": "Notification-RGB (Ringe) hinzufügen" },
-      "entry_type": "Notification-RGB",
+      "entry_type": "Notification-RGB (Minihub)",
       "step": {
         "user": {
           "title": "Notification-RGB (Aqara Ringe)",
-          "description": "Status-Anzeige des Activity State auf einem oder mehreren RGB-Ringen (simultan).",
+          "description": "Mappt Activity-State-Werte (z.B. free_time, gaming, sleep) auf Aqara-Effekt-Namen. Bis zu 8 Mappings, simultan auf allen Ringen.",
           "data": {
             "name": "Name",
             "ring_target_entities": "RGB-Ringe (Aqara, mehrere)",
-            "activity_state_entity": "Activity-Quelle (optional — sonst Hub)"
+            "activity_state_entity": "Activity-Quelle (optional — sonst Hub)",
+            "mapping_value_0": "Slot 1 · Activity-State",
+            "mapping_preset_0": "Slot 1 · Aqara-Effekt-Name",
+            "mapping_value_1": "Slot 2 · Activity-State",
+            "mapping_preset_1": "Slot 2 · Aqara-Effekt-Name",
+            "mapping_value_2": "Slot 3 · Activity-State",
+            "mapping_preset_2": "Slot 3 · Aqara-Effekt-Name",
+            "mapping_value_3": "Slot 4 · Activity-State",
+            "mapping_preset_3": "Slot 4 · Aqara-Effekt-Name",
+            "mapping_value_4": "Slot 5 · Activity-State",
+            "mapping_preset_4": "Slot 5 · Aqara-Effekt-Name",
+            "mapping_value_5": "Slot 6 · Activity-State",
+            "mapping_preset_5": "Slot 6 · Aqara-Effekt-Name",
+            "mapping_value_6": "Slot 7 · Activity-State",
+            "mapping_preset_6": "Slot 7 · Aqara-Effekt-Name",
+            "mapping_value_7": "Slot 8 · Activity-State",
+            "mapping_preset_7": "Slot 8 · Aqara-Effekt-Name"
           }
         }
       }
