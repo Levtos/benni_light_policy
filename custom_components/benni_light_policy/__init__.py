@@ -69,7 +69,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def _coordinators(hass: HomeAssistant) -> list[LightPolicyCoordinator]:
-    return [b[DATA_COORDINATOR] for b in hass.data.get(DOMAIN, {}).values()]
+    # hass.data[DOMAIN] enthält neben Entry-Buckets (dict) auch Setup-Flags (bool).
+    return [
+        b[DATA_COORDINATOR]
+        for b in hass.data.get(DOMAIN, {}).values()
+        if isinstance(b, dict) and DATA_COORDINATOR in b
+    ]
 
 
 def _async_register_services(hass: HomeAssistant) -> None:
