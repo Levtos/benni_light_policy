@@ -99,6 +99,7 @@ def test_waking_overrides_everything():
     assert p.mode == C.MODE_WAKING
     assert p.apply_kind == P.APPLY_CCT
     assert p.color_temp == C.COLOR_TEMP_WAKING
+    assert p.preset_enum == C.MODE_WAKING   # Look-Ref → Kelvin-Look "waking"
 
 
 def test_sleep_hard_off():
@@ -127,6 +128,7 @@ def test_work_home_cct():
     assert p.mode == C.MODE_WORK_HOME
     assert p.color_temp == C.COLOR_TEMP_WORK_HOME
     assert p.apply_kind == P.APPLY_CCT
+    assert p.preset_enum == C.MODE_WORK_HOME   # Look-Ref → Kelvin-Look "work_home"
 
 
 def test_household_uses_dayphase_preset():

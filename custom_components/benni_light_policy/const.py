@@ -124,7 +124,7 @@ CONF_MEDIA_DEVICE: Final = "media_device_entity"
 CONF_MEDIA_CONTEXT: Final = "media_context_entity"
 
 # Apply-Schicht.
-CONF_PRESET_CATALOG: Final = "preset_catalog_entity"   # sensor mit UUID-Lookup (Attribute)
+CONF_PRESET_CATALOG: Final = "preset_catalog_entity"   # (deprecated, UX-Rework) ungenutzt seit Look-Kanal
 CONF_GROUP_MAIN: Final = "group_main"                  # Hauptgruppe (light/group entity_id)
 CONF_GROUP_CEILING: Final = "group_ceiling"            # Deckenlampe CCT
 CONF_GROUP_ALL: Final = "group_all"                    # Hard-Off-Ziel
@@ -342,8 +342,12 @@ SERVICE_APPLY_NOW: Final = "apply_now"
 SERVICE_SET_MANUAL_OFF: Final = "set_manual_off"
 SERVICE_CLEAR_MANUAL_OFF: Final = "clear_manual_off"
 
-# Scene-Presets-Integration (extern, eigene Domain).
-SCENE_PRESETS_DOMAIN: Final = "scene_presets"
-SP_SERVICE_APPLY_PRESET: Final = "apply_preset"
-SP_SERVICE_START_DYNAMIC: Final = "start_dynamic_scene"
-SP_SERVICE_STOP_FOR_TARGETS: Final = "stop_dynamic_scenes_for_targets"
+# Scene-Presets-Integration (extern, eigene Domain — benni_scene_presets-Fork).
+# Apply läuft über die Look-Ebene: ein Look ist die deploybare Einheit (trägt Targets,
+# Bindings, Off-Bindings, Crossfade) und wird per Name ODER Slug referenziert. Die Policy
+# liefert die Look-Ref (über preset_enum) + Brightness aus der Tagesphase.
+SCENE_PRESETS_DOMAIN: Final = "benni_scene_presets"
+SP_SERVICE_APPLY_LOOK: Final = "apply_look"
+SP_SERVICE_STOP_LOOK: Final = "stop_look"
+SP_ATTR_LOOK: Final = "look"          # Service-Feld: Look-Name oder -Slug
+SP_ATTR_BRIGHTNESS: Final = "brightness"

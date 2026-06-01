@@ -4,9 +4,11 @@ Hört auf alle Quell-Entities, rechnet bei jedem Trigger eine neue Decision
 (`policy.decide`) und wendet sie an — aber nur wenn `apply_enabled` an ist.
 Default ist `apply_enabled=False` (Shadow-safe für Phase-4-Cut-Over).
 
-Apply-Choreografie lebt hier in Python (R3/R3b Crossfade), nicht in YAML:
-    stop_dynamic_scenes_for_targets → apply_preset(transition=crossfade)
-    → delay(crossfade) → exclusive_off → start_dynamic_scene
+Apply läuft über die Look-Ebene von benni_scene_presets: pro Decision EIN
+`apply_look {look, brightness}`. Der Look trägt Targets, Off-Bindings und Crossfade
+selbst (`look_transition`); apply_look stoppt überschneidende Lampen, Off-Bindings
+clearen den Rest. Brightness kommt aus der Tagesphase. Ausnahmen: wake_up (freie
+raw_targets) = direkter light.turn_on; Hard-Off = light.turn_off auf GROUP_ALL.
 Script-Modus `restart` wird durch Abbrechen eines laufenden Apply-Tasks nachgebildet.
 """
 from __future__ import annotations
@@ -54,8 +56,6 @@ from .const import (
     CONF_PRESENCE_HOUSEHOLD,
     CONF_PRESENCE_PERSONAL,
     CONF_PRESENCE_TRANSITION,
-    CONF_PRESET_CATALOG,
-    CONF_PRESET_ENUM,
     CONF_REQUIRE_BIRTHDAY,
     CONF_SCENE_INTERVAL_SECONDS,
     CONF_SEASON,
@@ -90,9 +90,9 @@ from .const import (
     TMC_FALLBACK_HOUR,
     TMC_TRIGGER_LUX,
     WEATHER_DARK_WINDOW_SECONDS,
-    SP_SERVICE_APPLY_PRESET,
-    SP_SERVICE_START_DYNAMIC,
-    SP_SERVICE_STOP_FOR_TARGETS,
+    SP_SERVICE_APPLY_LOOK,
+    SP_ATTR_LOOK,
+    SP_ATTR_BRIGHTNESS,
 )
 from .policy import APPLY_CCT, APPLY_OFF, APPLY_SCENE
 from .storage import make_store
@@ -451,32 +451,6 @@ class LightPolicyCoordinator:
         seen: set[str] = set()
         return [e for e in out if not (e in seen or seen.add(e))]
 
-    def _resolve_preset_id(self, preset_enum: str | None) -> tuple[str | None, dict[str, Any]]:
-        """preset_enum → (preset_id, overrides).
-
-        Sieht der Wert wie eine UUID aus, wird er direkt als preset_id
-        verwendet (User trägt z.B. bei Gaming/Musik die scene_presets-UUID
-        direkt im Subentry ein, kein Katalog nötig). Sonst Lookup im
-        Katalog-Sensor-Attribut.
-        """
-        if not preset_enum:
-            return None, {}
-        # UUID-Heuristik: 8-4-4-4-12 hex mit 4 Bindestrichen (locker geprüft).
-        if len(preset_enum) == 36 and preset_enum.count("-") == 4:
-            return preset_enum, {}
-        cat_eid = self._opt(CONF_PRESET_CATALOG)
-        if not cat_eid:
-            return None, {}
-        st = self.hass.states.get(cat_eid)
-        if st is None:
-            return None, {}
-        entry = (st.attributes or {}).get(preset_enum)
-        if isinstance(entry, dict):
-            return entry.get("preset_id"), entry
-        if isinstance(entry, str):
-            return entry, {}
-        return None, {}
-
     def _schedule_apply(self, plan: policy.Plan) -> None:
         # mode: restart — laufenden Crossfade abbrechen, neuen starten.
         if self._apply_task and not self._apply_task.done():
@@ -485,77 +459,51 @@ class LightPolicyCoordinator:
 
     async def _apply(self, plan: policy.Plan) -> None:
         try:
-            # Logische Gruppen-Namen → entity_ids, dazu rohe Subentry-Ziele
-            # (z.B. Wake-Up-Lampen), dedupliziert in Reihenfolge.
-            resolved = self._resolve_targets(plan.targets)
-            seen: set[str] = set()
-            targets = [e for e in (*resolved, *plan.raw_targets)
-                       if not (e in seen or seen.add(e))]
-            off_targets = self._resolve_targets(plan.exclusive_off)
             self._last_apply_ts = time.monotonic()
 
             if plan.apply_kind == APPLY_OFF:
-                await self._turn_off(self._resolve_targets([GROUP_ALL]) or off_targets)
+                await self._turn_off(
+                    self._resolve_targets([GROUP_ALL])
+                    or self._resolve_targets(plan.exclusive_off)
+                )
                 return
 
-            if plan.apply_kind == APPLY_CCT:
-                if not targets:
+            # wake_up-Sonderfall: freie raw_targets, kein Look → direkter CCT-turn_on.
+            if plan.apply_kind == APPLY_CCT and not plan.preset_enum:
+                if not plan.raw_targets:
                     _LOGGER.warning("light_policy: %s ohne konfigurierte Targets", plan.mode)
                     return
-                await self._stop_scenes(targets)
                 await self.hass.services.async_call(
                     "light", "turn_on",
                     {
-                        "entity_id": targets,
+                        "entity_id": list(plan.raw_targets),
                         "brightness": plan.brightness,
                         "color_temp_kelvin": plan.color_temp,
                         "transition": min(self.crossfade_seconds, 30),
                     },
                     blocking=False,
                 )
-                await self._turn_off(off_targets)
                 return
 
-            # APPLY_SCENE — Crossfade-Choreografie.
-            preset_id, overrides = self._resolve_preset_id(plan.preset_enum)
-            if not preset_id or not targets:
+            # Alle übrigen Modi (CCT-Kelvin-Look + Szene): EIN apply_look. Der Look trägt
+            # Targets, Off-Bindings und Crossfade selbst; apply_look stoppt überschneidende
+            # Lampen, Off-Bindings clearen den Rest. Brightness kommt aus der Tagesphase.
+            look_ref = plan.preset_enum
+            if not look_ref:
                 _LOGGER.warning(
-                    "light_policy: scene apply übersprungen (preset_id=%s, targets=%s)",
-                    preset_id, targets,
+                    "light_policy: apply übersprungen — keine Look-Ref (mode=%s)", plan.mode
                 )
                 return
-            crossfade = min(int(overrides.get("transition", self.crossfade_seconds)), 30)
-            interval = int(overrides.get("interval", self.scene_interval_seconds))
-            tgt = {"entity_id": targets}
-
-            await self._stop_scenes(targets)
+            data: dict[str, Any] = {SP_ATTR_LOOK: look_ref}
+            if plan.brightness:
+                data[SP_ATTR_BRIGHTNESS] = plan.brightness
             await self.hass.services.async_call(
-                SCENE_PRESETS_DOMAIN, SP_SERVICE_APPLY_PRESET,
-                {"scene_preset_id": preset_id, "targets": tgt,
-                 "transition": crossfade, **({"brightness": plan.brightness} if plan.brightness else {})},
-                blocking=False,
-            )
-            await asyncio.sleep(crossfade)          # R3b: erst NACH Delay exclusive_off
-            await self._turn_off(off_targets)
-            await self.hass.services.async_call(
-                SCENE_PRESETS_DOMAIN, SP_SERVICE_START_DYNAMIC,
-                {"scene_preset_id": preset_id, "targets": tgt,
-                 "transition": crossfade, "interval": interval,
-                 **({"brightness": plan.brightness} if plan.brightness else {})},
-                blocking=False,
+                SCENE_PRESETS_DOMAIN, SP_SERVICE_APPLY_LOOK, data, blocking=False,
             )
         except asyncio.CancelledError:
             raise
         except Exception as err:  # noqa: BLE001 - ein fehlgeschlagener Apply darf den Loop nicht killen
             _LOGGER.warning("light_policy: apply failed: %s", err)
-
-    async def _stop_scenes(self, targets: list[str]) -> None:
-        if not targets:
-            return
-        await self.hass.services.async_call(
-            SCENE_PRESETS_DOMAIN, SP_SERVICE_STOP_FOR_TARGETS,
-            {"targets": {"entity_id": targets}}, blocking=False,
-        )
 
     async def _turn_off(self, targets: list[str]) -> None:
         if not targets:
@@ -582,25 +530,6 @@ class LightPolicyCoordinator:
         Update-Listener lädt den Entry neu, der neue Coordinator liest den Wert."""
         new_options = {**self.entry.options, CONF_APPLY_ENABLED: bool(value)}
         self.hass.config_entries.async_update_entry(self.entry, options=new_options)
-
-    async def async_apply_simple_preset(
-        self, preset_enum: str, entity_ids: list[str], *, brightness: int | None = None
-    ) -> None:
-        """Einmaliges sanftes apply_preset (z.B. Bettgeh-Signal R16) — kein Dynamic-Loop."""
-        preset_id, overrides = self._resolve_preset_id(preset_enum)
-        if not preset_id or not entity_ids:
-            _LOGGER.warning(
-                "light_policy: simple preset übersprungen (preset_id=%s, targets=%s)",
-                preset_id, entity_ids,
-            )
-            return
-        transition = min(int(overrides.get("transition", self.crossfade_seconds)), 30)
-        await self.hass.services.async_call(
-            SCENE_PRESETS_DOMAIN, SP_SERVICE_APPLY_PRESET,
-            {"scene_preset_id": preset_id, "targets": {"entity_id": entity_ids},
-             "transition": transition, **({"brightness": brightness} if brightness else {})},
-            blocking=False,
-        )
 
     # ----- helpers für Bereichs-Controller -----
     def get_option(self, key: str, default=None):

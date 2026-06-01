@@ -9,5 +9,6 @@
   "iot_class": "calculated",
   "integration_type": "service",
   "dependencies": [],
+  "after_dependencies": ["benni_scene_presets"],
   "requirements": []
 }

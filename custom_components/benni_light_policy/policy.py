@@ -60,8 +60,9 @@ from .const import (
 
 # Apply-Kind: wie die Apply-Schicht den Plan umsetzt.
 APPLY_OFF = "off"      # Hard-Off (alle WZ-Lampen aus)
-APPLY_CCT = "cct"      # direktes light.turn_on mit color_temp (work_home, waking)
-APPLY_SCENE = "scene"  # Scene-Presets-Dynamic-Scene (Crossfade)
+APPLY_CCT = "cct"      # Kelvin-Modi (work_home, waking): über Kelvin-Look, außer wake_up
+                       # (raw_targets, preset_enum=None) → direkter light.turn_on
+APPLY_SCENE = "scene"  # benni_scene_presets.apply_look (Look trägt Targets/Off/Crossfade)
 
 # Kalender-Thema (deutsch, aus benni_context) → Preset-Theme (Katalog-Schlüssel).
 THEME_MAP = {
@@ -267,7 +268,7 @@ def _eval_waking(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | No
     if ctx.bio_state != BIO_WAKING:
         return None
     return Plan(
-        mode=MODE_WAKING, preset_enum=None,
+        mode=MODE_WAKING, preset_enum=MODE_WAKING,   # Look-Ref → Kelvin-Look "waking"
         brightness=_brightness(profile, MODE_WAKING), color_temp=COLOR_TEMP_WAKING,
         apply_kind=APPLY_CCT, targets=[GROUP_ALL], lux_gate_on=gate,
         reason="waking: bio=waking (Weckerlicht, Lux-Gate ignoriert)",
@@ -309,7 +310,7 @@ def _eval_work_home(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan |
     if ctx.activity_state != ACTIVITY_WORK_HOME:
         return None
     return Plan(
-        mode=MODE_WORK_HOME, preset_enum=None,
+        mode=MODE_WORK_HOME, preset_enum=MODE_WORK_HOME,   # Look-Ref → Kelvin-Look "work_home"
         brightness=_brightness(profile, MODE_WORK_HOME), color_temp=COLOR_TEMP_WORK_HOME,
         apply_kind=APPLY_CCT, targets=[GROUP_CEILING, GROUP_MAIN],
         lux_gate_on=gate, reason="work_home: activity=work_home (CCT 5000K)",
@@ -423,7 +424,7 @@ def make_gaming_policy(
 ) -> PolicyDef:
     """Gaming-Minihub: eine Subentry pro Quelle (PC, PS5, Nintendo …).
     Gate: media_device == source_id (Source ist aktiv) + activity in free/idle.
-    Mapping classifier_value → preset_uuid. Mehrere Quellen gleichzeitig:
+    Mapping classifier_value → Look-Ref (Name/Slug). Mehrere Quellen gleichzeitig:
     Konflikt wird über priority gelöst (PS5=9 < Nintendo=10 < Cinema=11 < PC=12).
     """
 
@@ -453,7 +454,7 @@ def make_music_policy(
     priority: int = PRIO_MUSIC_PARTY,
     target: str = GROUP_MAIN,
 ) -> PolicyDef:
-    """Musik-Minihub: classifier_value → preset_uuid (optional Geburtstag-Gate).
+    """Musik-Minihub: classifier_value → Look-Ref (Name/Slug) (optional Geburtstag-Gate).
     Strukturgleich zum Gaming-Minihub, ohne source_id (Musik-Quelle ist
     typischerweise singulär; bei Bedarf später erweiterbar)."""
 
