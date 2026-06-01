@@ -31,7 +31,6 @@ async def async_get_config_entry_diagnostics(
             "plan": plan.as_dict() if plan else None,
             "lux_gate": coord.gate_internals(),
             "ring_mode": coord.ring_mode,
-            "bedtime_signal_active": coord.bedtime_signal_active,
             "startup_ready": coord.startup_ready,
             "apply_enabled": coord.apply_enabled,
             "manual_off_active": coord.manual_off_active,

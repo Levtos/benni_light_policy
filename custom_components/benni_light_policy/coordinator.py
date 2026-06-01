@@ -33,13 +33,10 @@ except Exception:  # pragma: no cover
 
 from . import areas, policy
 from .const import (
-    BEDTIME_AWAKE_THRESHOLD_MINUTES,
     BIO_AWAKE,
     BIO_SLEEP,
     CONF_ACTIVITY_STATE,
     CONF_APPLY_ENABLED,
-    CONF_AWAKE_MINUTES,
-    CONF_BEDROOM_GROUP,
     CONF_BIO_STATE,
     CONF_BRIGHTNESS,
     CONF_CALENDAR_THEME,
@@ -65,8 +62,15 @@ from .const import (
     CONF_STARTUP_BLOCK_SECONDS,
     CONF_SYSTEM_READY,
     CONF_TITLE_CLASSIFIER,
+    CONF_MAPPINGS,
+    CONF_MEDIA_CONTEXT,
+    CONF_MEDIA_DEVICE,
+    CONF_SOURCE_ID,
+    CONF_SOURCE_PRIORITY,
     CONF_TRIGGER_VALUE,
+    CONF_WAKE_UP_TARGETS,
     CONF_WEATHER,
+    GAMING_DEFAULT_PRIORITY,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_BRIGHTNESS,
     DEFAULT_CROSSFADE_SECONDS,
@@ -79,11 +83,10 @@ from .const import (
     GROUP_MAIN,
     PHASE_EARLY_MORNING,
     PRESENCE_TRANSITION_COMING_HOME,
-    PRESET_BEDROOM_BEDTIME,
     SCENE_PRESETS_DOMAIN,
-    SUBENTRY_BEDROOM,
     SUBENTRY_GAMING,
     SUBENTRY_MUSIC,
+    SUBENTRY_WAKE_UP,
     TMC_FALLBACK_HOUR,
     TMC_TRIGGER_LUX,
     WEATHER_DARK_WINDOW_SECONDS,
@@ -141,8 +144,6 @@ class LightPolicyCoordinator:
         self._apply_task: asyncio.Task | None = None
 
         self._areas: list = []
-        self._bedtime_active = False
-        self._bedtime_active_ids: set[str] = set()
         self._ring_mode: str | None = None
         self._last_weather_dark = False
 
@@ -197,19 +198,19 @@ class LightPolicyCoordinator:
             CONF_PRESENCE_PERSONAL, CONF_PRESENCE_HOUSEHOLD, CONF_GUEST,
             CONF_PRESENCE_TRANSITION,
             CONF_SEASON, CONF_CALENDAR_THEME,
-            CONF_ENTERTAINMENT_STABLE, CONF_OVERNIGHT_AWAY, CONF_SYSTEM_READY,
+            CONF_ENTERTAINMENT_STABLE, CONF_MEDIA_DEVICE, CONF_MEDIA_CONTEXT,
+            CONF_OVERNIGHT_AWAY, CONF_SYSTEM_READY,
             CONF_WEATHER,
             CONF_GROUP_MAIN, CONF_GROUP_CEILING, CONF_GROUP_ALL,
         ):
             v = self._opt(key)
             if isinstance(v, str) and v:
                 watch.add(v)
-        # Subentry-Quellen (Gaming/Musik-Classifier, Bedroom-Awake) mitbeobachten.
+        # Subentry-Quellen (Gaming/Musik-Classifier) mitbeobachten.
         for sub in self.entry.subentries.values():
-            for key in (CONF_CLASSIFIER_ENTITY, CONF_AWAKE_MINUTES):
-                v = sub.data.get(key)
-                if isinstance(v, str) and v:
-                    watch.add(v)
+            v = sub.data.get(CONF_CLASSIFIER_ENTITY)
+            if isinstance(v, str) and v:
+                watch.add(v)
 
         if watch:
             self._unsub.append(
@@ -301,6 +302,8 @@ class LightPolicyCoordinator:
             calendar_theme=self._read(CONF_CALENDAR_THEME),
             title_classifier=self._read(CONF_TITLE_CLASSIFIER),
             entertainment_stable=_bool_state(self._read(CONF_ENTERTAINMENT_STABLE)),
+            media_device=self._read(CONF_MEDIA_DEVICE),
+            media_context=self._read(CONF_MEDIA_CONTEXT),
             overnight_away=_bool_state(self._read(CONF_OVERNIGHT_AWAY)),
             presence_transition=self._read(CONF_PRESENCE_TRANSITION),
             lux=_float_or_none(self._read(CONF_LUX)),
@@ -378,8 +381,6 @@ class LightPolicyCoordinator:
         if plan.apply_allowed and hash_changed:
             self._schedule_apply(plan)
 
-        self._evaluate_bedtime_signal(ctx)
-
         await self._async_save()
         for cb in self._listeners:
             cb()
@@ -394,54 +395,41 @@ class LightPolicyCoordinator:
         return st.state
 
     def _build_extra_policies(self) -> list[policy.PolicyDef]:
-        """Gaming/Musik-Subentries → Policies (eigener Classifier-Wert + Mapping)."""
+        """Subentry-getriebene Policies: Gaming/Musik (Classifier+Mapping)
+        + Wake-Up (vereinigte Ziel-Lampen aller wake_up-Subentries)."""
         out: list[policy.PolicyDef] = []
+        wake_up_targets: list[str] = []
         for sub in self.entry.subentries.values():
             d = sub.data
-            trig = d.get(CONF_TRIGGER_VALUE)
-            preset = d.get(CONF_PRESET_ENUM)
-            if not (trig and preset):
+            if sub.subentry_type == SUBENTRY_WAKE_UP:
+                for eid in (d.get(CONF_WAKE_UP_TARGETS) or []):
+                    if isinstance(eid, str) and eid and eid not in wake_up_targets:
+                        wake_up_targets.append(eid)
+                continue
+            # Minihub: mappings = dict {classifier_value (str) → preset_uuid (str)}
+            mappings = d.get(CONF_MAPPINGS) or {}
+            if not isinstance(mappings, dict) or not mappings:
                 continue
             value = self._read_entity(d.get(CONF_CLASSIFIER_ENTITY))
             if sub.subentry_type == SUBENTRY_GAMING:
-                out.append(policy.make_gaming_policy(value, {trig: preset}))
+                source_id = (d.get(CONF_SOURCE_ID) or "").strip().lower()
+                if not source_id:
+                    continue
+                priority = int(d.get(CONF_SOURCE_PRIORITY)
+                               or GAMING_DEFAULT_PRIORITY.get(source_id, policy.PRIO_GAMING))
+                out.append(policy.make_gaming_policy(
+                    source_id, value, mappings, priority=priority,
+                ))
             elif sub.subentry_type == SUBENTRY_MUSIC:
                 out.append(policy.make_music_policy(
-                    value, frozenset({trig}), preset,
+                    value, mappings,
                     require_birthday=bool(d.get(CONF_REQUIRE_BIRTHDAY, True)),
                 ))
+        if wake_up_targets:
+            out.append(policy.make_wake_up_policy(wake_up_targets))
         return out
 
-    def _evaluate_bedtime_signal(self, ctx: policy.Context) -> None:
-        """R16: edge-getriggert pro Schlafzimmer-Subentry."""
-        any_active = False
-        for sub in self.entry.subentries.values():
-            if sub.subentry_type != SUBENTRY_BEDROOM:
-                continue
-            d = sub.data
-            awake = _float_or_none(self._read_entity(d.get(CONF_AWAKE_MINUTES)))
-            due = policy.bedtime_signal_due(
-                ctx.day_state, ctx.bio_state, awake,
-                threshold_minutes=BEDTIME_AWAKE_THRESHOLD_MINUTES,
-            )
-            sid = sub.subentry_id
-            if due:
-                any_active = True
-                if sid not in self._bedtime_active_ids:
-                    self._bedtime_active_ids.add(sid)
-                    group = d.get(CONF_BEDROOM_GROUP)
-                    preset = d.get(CONF_PRESET_ENUM) or PRESET_BEDROOM_BEDTIME
-                    if self.apply_enabled and group:
-                        self.hass.async_create_task(
-                            self.async_apply_simple_preset(preset, [group])
-                        )
-            else:
-                self._bedtime_active_ids.discard(sid)
-        self._bedtime_active = any_active
-
-    @property
-    def bedtime_signal_active(self) -> bool:
-        return self._bedtime_active
+    # (R16 Bettgeh-Signal entfernt — User: stattdessen Wake-Up via wake_planner.)
 
     # ----- apply (gated, R3/R3b Crossfade) -----
     def _resolve_targets(self, logical: list[str]) -> list[str]:
@@ -464,9 +452,18 @@ class LightPolicyCoordinator:
         return [e for e in out if not (e in seen or seen.add(e))]
 
     def _resolve_preset_id(self, preset_enum: str | None) -> tuple[str | None, dict[str, Any]]:
-        """preset_enum → (preset_id, overrides) via Katalog-Sensor-Attribute."""
+        """preset_enum → (preset_id, overrides).
+
+        Sieht der Wert wie eine UUID aus, wird er direkt als preset_id
+        verwendet (User trägt z.B. bei Gaming/Musik die scene_presets-UUID
+        direkt im Subentry ein, kein Katalog nötig). Sonst Lookup im
+        Katalog-Sensor-Attribut.
+        """
         if not preset_enum:
             return None, {}
+        # UUID-Heuristik: 8-4-4-4-12 hex mit 4 Bindestrichen (locker geprüft).
+        if len(preset_enum) == 36 and preset_enum.count("-") == 4:
+            return preset_enum, {}
         cat_eid = self._opt(CONF_PRESET_CATALOG)
         if not cat_eid:
             return None, {}
@@ -488,7 +485,12 @@ class LightPolicyCoordinator:
 
     async def _apply(self, plan: policy.Plan) -> None:
         try:
-            targets = self._resolve_targets(plan.targets)
+            # Logische Gruppen-Namen → entity_ids, dazu rohe Subentry-Ziele
+            # (z.B. Wake-Up-Lampen), dedupliziert in Reihenfolge.
+            resolved = self._resolve_targets(plan.targets)
+            seen: set[str] = set()
+            targets = [e for e in (*resolved, *plan.raw_targets)
+                       if not (e in seen or seen.add(e))]
             off_targets = self._resolve_targets(plan.exclusive_off)
             self._last_apply_ts = time.monotonic()
 

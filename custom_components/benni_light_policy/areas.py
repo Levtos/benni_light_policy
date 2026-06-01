@@ -25,6 +25,7 @@ from .const import (
     CONF_BATHROOM_TIMEOUT,
     CONF_HALLWAY_LIGHT,
     CONF_HALLWAY_TRIGGERS,
+    CONF_MAPPINGS,
     CONF_RING_PRESET_MAP,
     CONF_RING_TARGETS,
     HALLWAY_COLOR_TEMP,
@@ -185,9 +186,11 @@ class BathroomController(_AreaBase):
         def _fire(_now) -> None:
             self._timer_unsub = None
             if self.apply_enabled:
+                # Domain-agnostisch: Bad-Licht kann light.* ODER switch.*
+                # (z.B. Shelly) sein. homeassistant.turn_off dispatcht korrekt.
                 self.hass.async_create_task(
                     self.hass.services.async_call(
-                        "light", "turn_off",
+                        "homeassistant", "turn_off",
                         {"entity_id": self.opt(CONF_BATHROOM_LIGHT)}, blocking=False,
                     )
                 )
@@ -231,7 +234,9 @@ class RingController(_AreaBase):
         targets = self.opt(CONF_RING_TARGETS) or []
         if isinstance(targets, str):
             targets = [targets]
-        preset_map = self.opt(CONF_RING_PRESET_MAP) or {}
+        # Minihub-Mapping (activity_state-Wert → Aqara-Effekt-Name).
+        # Backward-Compat: alter CONF_RING_PRESET_MAP wird noch akzeptiert.
+        preset_map = self.opt(CONF_MAPPINGS) or self.opt(CONF_RING_PRESET_MAP) or {}
         effect = preset_map.get(new.state)
         if not (self.apply_enabled and targets and effect):
             return

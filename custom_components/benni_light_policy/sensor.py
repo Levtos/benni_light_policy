@@ -174,7 +174,6 @@ class DebugSensor(LightPolicyEntity, SensorEntity):
         attrs = {
             "lux_gate": self.coord.gate_internals(),
             "ring_mode": self.coord.ring_mode,
-            "bedtime_signal_active": self.coord.bedtime_signal_active,
         }
         p = self.coord.last_plan
         if p:
