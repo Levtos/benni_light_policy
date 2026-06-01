@@ -8,7 +8,7 @@
   "config_flow": true,
   "iot_class": "calculated",
   "integration_type": "service",
-  "dependencies": [],
+  "dependencies": ["http", "websocket_api", "frontend"],
   "after_dependencies": ["benni_scene_presets"],
   "requirements": []
 }

@@ -98,6 +98,13 @@ SEASON_AUTUMN: Final = "autumn"
 SEASON_WINTER: Final = "winter"
 SEASONS: Final = (SEASON_SPRING, SEASON_SUMMER, SEASON_AUTUMN, SEASON_WINTER)
 
+# Event-Themes (THEME_MAP-Ziele) zusätzlich zu den Jahreszeiten — zusammen die
+# Zeilen der Tagesphasen-Matrix (Theme × Phase → Look).
+POLICY_EVENT_THEMES: Final = ("christmas", "easter", "halloween")
+POLICY_THEMES: Final = (*SEASONS, *POLICY_EVENT_THEMES)
+# Feste Policy-Modi, die einen Look-Ref brauchen (keine Tagesphasen-Matrix).
+POLICY_FIXED_MODES: Final = ("cinema", "private_time", "waking", "work_home")
+
 CALENDAR_BIRTHDAY: Final = "geburtstag"
 
 # --------------------------------------------------------------------------- #
@@ -236,6 +243,10 @@ CONF_SCENE_TRANSITION_SECONDS: Final = "scene_transition_seconds"
 CONF_SCENE_INTERVAL_SECONDS: Final = "scene_interval_seconds"
 CONF_LUX_THRESHOLDS: Final = "lux_thresholds"          # dict season -> {dark, bright}
 CONF_BRIGHTNESS: Final = "brightness_profile"          # dict mode/phase -> 0..255
+# Zentrale Look-Map: policy_key -> Look-Ref (Slug ODER Name aus benni_scene_presets).
+# Löst die Tagesphasen-/Modus-Keys (Unterstriche) auf echte Look-Refs auf, statt auf
+# harte Namenskonventionen zu vertrauen. Mehrere Keys dürfen denselben Look nutzen.
+CONF_LOOK_MAP: Final = "look_map"
 
 # --------------------------------------------------------------------------- #
 # Defaults & Konstanten (Lastenheft §8)
@@ -351,3 +362,22 @@ SP_SERVICE_APPLY_LOOK: Final = "apply_look"
 SP_SERVICE_STOP_LOOK: Final = "stop_look"
 SP_ATTR_LOOK: Final = "look"          # Service-Feld: Look-Name oder -Slug
 SP_ATTR_BRIGHTNESS: Final = "brightness"
+# WS-Command des Forks, über das das Panel die echten Looks (Slug+Name) holt.
+SP_WS_LIST_LOOKS: Final = "benni_scene_presets/list_looks"
+
+# --------------------------------------------------------------------------- #
+# Panel / WebSocket-API (eigenes Dashboard-Frontend)
+# --------------------------------------------------------------------------- #
+PANEL_URL_PATH: Final = "benni_light_policy"          # Sidebar-Eintrag
+PANEL_TITLE: Final = "Light Policy"
+PANEL_ICON: Final = "mdi:lightbulb-auto"
+FRONTEND_DIR_URL: Final = "/benni_light_policy_app"   # statisch ausgelieferte App
+FRONTEND_ENTRY: Final = f"{FRONTEND_DIR_URL}/main.js"
+PANEL_ELEMENT: Final = "blp-app"
+
+# WS-Commands (Namespace = Domain).
+WS_GET_STATUS: Final = f"{DOMAIN}/get_status"
+WS_GET_LOOK_MAP: Final = f"{DOMAIN}/get_look_map"
+WS_SET_LOOK_MAP: Final = f"{DOMAIN}/set_look_map"
+WS_SET_SUBENTRY_MAPPINGS: Final = f"{DOMAIN}/set_subentry_mappings"
+WS_SET_APPLY_ENABLED: Final = f"{DOMAIN}/set_apply_enabled"

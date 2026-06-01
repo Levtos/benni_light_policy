@@ -50,6 +50,7 @@ from .const import (
     CONF_GROUP_CEILING,
     CONF_GROUP_MAIN,
     CONF_GUEST,
+    CONF_LOOK_MAP,
     CONF_LUX,
     CONF_LUX_THRESHOLDS,
     CONF_OVERNIGHT_AWAY,
@@ -174,6 +175,20 @@ class LightPolicyCoordinator:
     @property
     def manual_off_active(self) -> bool:
         return self._manual_off
+
+    @property
+    def look_map(self) -> dict[str, str]:
+        """Zentrale Map policy_key -> Look-Ref (Slug/Name). Aus den Options."""
+        raw = self._opt(CONF_LOOK_MAP) or {}
+        return dict(raw) if isinstance(raw, dict) else {}
+
+    def resolve_look_ref(self, policy_key: str | None) -> str | None:
+        """policy_key -> Look-Ref. Map gewinnt; sonst Key selbst (Fallback ohne
+        Namenskonvention). Leere Map-Werte werden ignoriert."""
+        if not policy_key:
+            return None
+        mapped = self.look_map.get(policy_key)
+        return mapped.strip() if isinstance(mapped, str) and mapped.strip() else policy_key
 
     def _startup_ready(self) -> bool:
         if not self._ha_started:
@@ -488,7 +503,9 @@ class LightPolicyCoordinator:
             # Alle übrigen Modi (CCT-Kelvin-Look + Szene): EIN apply_look. Der Look trägt
             # Targets, Off-Bindings und Crossfade selbst; apply_look stoppt überschneidende
             # Lampen, Off-Bindings clearen den Rest. Brightness kommt aus der Tagesphase.
-            look_ref = plan.preset_enum
+            # Der Policy-Key (preset_enum) wird über die zentrale Look-Map auf einen echten
+            # Look-Ref (Slug/Name) aufgelöst — fällt auf den Key selbst zurück.
+            look_ref = self.resolve_look_ref(plan.preset_enum)
             if not look_ref:
                 _LOGGER.warning(
                     "light_policy: apply übersprungen — keine Look-Ref (mode=%s)", plan.mode
@@ -530,6 +547,35 @@ class LightPolicyCoordinator:
         Update-Listener lädt den Entry neu, der neue Coordinator liest den Wert."""
         new_options = {**self.entry.options, CONF_APPLY_ENABLED: bool(value)}
         self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+
+    async def async_set_look_map(self, mapping: dict[str, str]) -> dict[str, str]:
+        """Zentrale Look-Map schreiben (policy_key -> Look-Ref). Leere Werte werden
+        entfernt (= Mapping gelöscht). Schreibt in die Options → Reload-Listener."""
+        cleaned = {
+            str(k): str(v).strip()
+            for k, v in (mapping or {}).items()
+            if isinstance(v, str) and v.strip()
+        }
+        new_options = {**self.entry.options, CONF_LOOK_MAP: cleaned}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        return cleaned
+
+    async def async_set_subentry_mappings(
+        self, subentry_id: str, mappings: dict[str, str]
+    ) -> dict[str, str]:
+        """Gaming/Musik/Ring-Subentry: classifier_value -> Look-Ref schreiben.
+        Aktualisiert die Subentry-Daten (kein UUID/Preset mehr)."""
+        sub = self.entry.subentries.get(subentry_id)
+        if sub is None:
+            raise ValueError(f"unknown subentry {subentry_id}")
+        cleaned = {
+            str(k).strip(): str(v).strip()
+            for k, v in (mappings or {}).items()
+            if str(k).strip() and isinstance(v, str) and v.strip()
+        }
+        new_data = {**sub.data, CONF_MAPPINGS: cleaned}
+        self.hass.config_entries.async_update_subentry(self.entry, sub, data=new_data)
+        return cleaned
 
     # ----- helpers für Bereichs-Controller -----
     def get_option(self, key: str, default=None):

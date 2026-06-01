@@ -19,10 +19,13 @@ from .const import (
     SERVICE_SET_MANUAL_OFF,
 )
 from .coordinator import LightPolicyCoordinator
+from .view import async_remove_view, async_setup_view
+from .websocket_api import async_setup_websocket_api
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
+_WS_FLAG = "_ws_registered"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -31,10 +34,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coord.async_start()
     await coord.async_evaluate()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {DATA_COORDINATOR: coord}
+    data = hass.data.setdefault(DOMAIN, {})
+    data[entry.entry_id] = {DATA_COORDINATOR: coord}
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _async_register_services(hass)
+
+    # Panel + WebSocket-API (Dashboard-Frontend). WS einmalig pro HA-Prozess.
+    await async_setup_view(hass)
+    if not data.get(_WS_FLAG):
+        async_setup_websocket_api(hass)
+        data[_WS_FLAG] = True
+
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
 
@@ -49,7 +60,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         bucket = hass.data[DOMAIN].pop(entry.entry_id, None)
         if bucket:
             bucket[DATA_COORDINATOR].async_stop()
-        if not hass.data[DOMAIN]:
+        # Kein Coordinator mehr → Panel + Services entfernen.
+        if not any(DATA_COORDINATOR in b for b in hass.data[DOMAIN].values() if isinstance(b, dict)):
+            async_remove_view(hass)
             for svc in (SERVICE_APPLY_NOW, SERVICE_SET_MANUAL_OFF, SERVICE_CLEAR_MANUAL_OFF):
                 hass.services.async_remove(DOMAIN, svc)
     return unloaded
