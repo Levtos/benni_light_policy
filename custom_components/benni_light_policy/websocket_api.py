@@ -65,6 +65,10 @@ MAPPING_SUBENTRY_TYPES = (SUBENTRY_GAMING, SUBENTRY_MUSIC, SUBENTRY_NOTIFICATION
 def _coordinator(hass: HomeAssistant):
     bucket = hass.data.get(DOMAIN) or {}
     for entry_bucket in bucket.values():
+        # hass.data[DOMAIN] enthält neben den Entry-Buckets (dict) auch Setup-Flags
+        # (bool) — nur echte Entry-Buckets betrachten.
+        if not isinstance(entry_bucket, dict):
+            continue
         coord = entry_bucket.get(DATA_COORDINATOR)
         if coord is not None:
             return coord
