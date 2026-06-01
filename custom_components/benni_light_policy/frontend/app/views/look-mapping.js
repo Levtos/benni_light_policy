@@ -42,14 +42,12 @@ export function render(el, ctx) {
     if (value) map[key] = value; else delete map[key];
     try {
       await store.setLookMap(map);
-      ctx.toast("Mapping gespeichert");
+      ctx.toast(value ? "Mapping gespeichert" : "Mapping entfernt");
       setTimeout(ctx.refresh, 500);
     } catch (err) {
       ctx.toast("Fehler: " + (err.message || err));
     }
   };
-  el.querySelectorAll(".look-select, .look-input").forEach((node) => {
-    const ev = node.classList.contains("look-input") ? "change" : "change";
-    node.addEventListener(ev, () => onChange(node.dataset.key, node.value.trim()));
-  });
+  el.querySelectorAll(".look-select, .look-input").forEach((node) =>
+    node.addEventListener("change", () => onChange(node.dataset.key, node.value.trim())));
 }

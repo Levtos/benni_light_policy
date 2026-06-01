@@ -73,16 +73,21 @@ export class Store {
     return this._lookBySlug.get(ref) || this._lookByName.get(String(ref).toLowerCase()) || null;
   }
 
-  // Coverage eines Policy-Keys: {status, ref, look, mapped}
-  // status ∈ ok | invalid | missing
+  // Coverage eines Policy-Keys: {status, kind, ref, look, mapped}
+  //   status ∈ ok | invalid | missing   (für Summary/Donut)
+  //   kind   ∈ mapped | fallback | invalid | missing   (für die Zell-Optik)
   coverage(policyKey) {
     const mapped = this.lookMap[policyKey];
     const ref = this.resolveRef(policyKey);
     const look = this.lookFor(ref);
     if (mapped && String(mapped).trim()) {
-      return { status: look ? "ok" : "invalid", ref, look, mapped: true };
+      return look
+        ? { status: "ok", kind: "mapped", ref, look, mapped: true }
+        : { status: "invalid", kind: "invalid", ref, look: null, mapped: true };
     }
-    return { status: look ? "ok" : "missing", ref, look, mapped: false };
+    return look
+      ? { status: "ok", kind: "fallback", ref, look, mapped: false }
+      : { status: "missing", kind: "missing", ref, look: null, mapped: false };
   }
 
   coverageSummary(keys) {
