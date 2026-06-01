@@ -141,6 +141,7 @@ class LightPolicyCoordinator:
         self._lux_history: list[tuple[float, float]] = []  # (monotonic_ts, lux)
 
         self._last_plan: policy.Plan | None = None
+        self._last_applied_hash: str | None = None  # hash actually pushed to lights
         self._last_apply_ts = 0.0
         self._apply_task: asyncio.Task | None = None
 
@@ -371,13 +372,14 @@ class LightPolicyCoordinator:
             self._manual_off = False
         self._prev_bio = ctx.bio_state
 
-        # R12 Heimkommen: coming_home-Flanke erzwingt einen Re-Apply (last_plan reset),
-        # damit das Licht sofort sitzt, auch wenn presence_personal erst gleich umflippt.
+        # R12 Heimkommen: coming_home-Flanke erzwingt einen Re-Apply (applied-hash
+        # reset), damit das Licht sofort sitzt, auch wenn presence_personal erst
+        # gleich umflippt.
         if (
             self._prev_presence_transition != PRESENCE_TRANSITION_COMING_HOME
             and ctx.presence_transition == PRESENCE_TRANSITION_COMING_HOME
         ):
-            self._last_plan = None
+            self._last_applied_hash = None
         self._prev_presence_transition = ctx.presence_transition
 
         plan = policy.decide(
@@ -390,10 +392,17 @@ class LightPolicyCoordinator:
             extra_policies=self._build_extra_policies(),
         )
 
-        hash_changed = self._last_plan is None or self._last_plan.scene_hash != plan.scene_hash
+        # Re-apply is keyed on the last *applied* hash, not the last *decided*
+        # plan. Otherwise a plan that was decided but blocked (startup gate,
+        # apply disabled, manual-off) marks the hash as "seen", so when the gate
+        # later clears with an unchanged hash it never applies — e.g. after an HA
+        # restart the dynamic scenes/looks are gone (they live only in RAM) but
+        # the policy thinks nothing changed and never re-applies the look.
+        hash_changed = self._last_applied_hash != plan.scene_hash
         self._last_plan = plan
 
         if plan.apply_allowed and hash_changed:
+            self._last_applied_hash = plan.scene_hash
             self._schedule_apply(plan)
 
         await self._async_save()
@@ -487,6 +496,7 @@ class LightPolicyCoordinator:
             if plan.apply_kind == APPLY_CCT and not plan.preset_enum:
                 if not plan.raw_targets:
                     _LOGGER.warning("light_policy: %s ohne konfigurierte Targets", plan.mode)
+                    self._last_applied_hash = None  # nichts angewandt → nächster Tick retry
                     return
                 await self.hass.services.async_call(
                     "light", "turn_on",
@@ -510,6 +520,7 @@ class LightPolicyCoordinator:
                 _LOGGER.warning(
                     "light_policy: apply übersprungen — keine Look-Ref (mode=%s)", plan.mode
                 )
+                self._last_applied_hash = None  # nichts angewandt → nächster Tick retry
                 return
             data: dict[str, Any] = {SP_ATTR_LOOK: look_ref}
             if plan.brightness:
@@ -521,6 +532,7 @@ class LightPolicyCoordinator:
             raise
         except Exception as err:  # noqa: BLE001 - ein fehlgeschlagener Apply darf den Loop nicht killen
             _LOGGER.warning("light_policy: apply failed: %s", err)
+            self._last_applied_hash = None  # Apply gescheitert → nächster Tick retry
 
     async def _turn_off(self, targets: list[str]) -> None:
         if not targets:
@@ -531,7 +543,7 @@ class LightPolicyCoordinator:
 
     # ----- service surface -----
     async def async_apply_now(self) -> policy.Plan:
-        self._last_plan = None  # erzwingt hash_changed → Re-Apply
+        self._last_applied_hash = None  # erzwingt hash_changed → Re-Apply
         return await self.async_evaluate()
 
     async def async_set_manual_off(self) -> None:
