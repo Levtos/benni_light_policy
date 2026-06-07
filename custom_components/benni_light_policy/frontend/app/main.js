@@ -4,6 +4,7 @@ import { Store } from "./store.js";
 import * as overview from "./views/overview.js";
 import * as lookMapping from "./views/look-mapping.js";
 import * as matrix from "./views/matrix.js";
+import * as brightness from "./views/brightness.js";
 import * as special from "./views/special-rules.js";
 import * as areas from "./views/areas.js";
 import * as diagnostics from "./views/diagnostics.js";
@@ -13,6 +14,7 @@ const NAV = [
   { id: "overview", label: "Übersicht", icon: "🏠", view: overview },
   { id: "look-mapping", label: "Look-Mapping", icon: "🎚", view: lookMapping },
   { id: "matrix", label: "Tagesphasen-Matrix", icon: "▦", view: matrix },
+  { id: "brightness", label: "Helligkeit", icon: "🔆", view: brightness },
   { id: "special", label: "Spezialregeln", icon: "🎮", view: special },
   { id: "areas", label: "Bereiche & Ausnahmen", icon: "📐", view: areas },
   { id: "diagnostics", label: "Diagnose", icon: "🩺", view: diagnostics },
@@ -27,8 +29,6 @@ class BlpApp extends HTMLElement {
     this._view = "overview";
     this._booted = false;
     this._hass = null;
-    this._liveTimer = null;
-    this._pollTimer = null;
   }
 
   set hass(v) {
@@ -36,20 +36,12 @@ class BlpApp extends HTMLElement {
     this._store.hass = v;
     if (!this._booted) {
       this._boot();
-    } else {
-      clearTimeout(this._liveTimer);
-      this._liveTimer = setTimeout(() => this._renderLive(), 250);
     }
   }
   get hass() { return this._hass; }
 
-  connectedCallback() {
-    this._pollTimer = setInterval(() => this.refresh(), 10000);
-  }
-  disconnectedCallback() {
-    clearInterval(this._pollTimer);
-    clearTimeout(this._liveTimer);
-  }
+  connectedCallback() {}
+  disconnectedCallback() {}
 
   async _boot() {
     if (this._booted) return;
@@ -103,13 +95,17 @@ class BlpApp extends HTMLElement {
         <main class="main">
           <div class="head">
             <div><h1 id="vtitle">Übersicht</h1><p id="vsub"></p></div>
-            <div class="chips" id="headchips"></div>
+            <div class="head-actions">
+              <button class="btn" id="manualRefresh">Aktualisieren</button>
+              <div class="chips" id="headchips"></div>
+            </div>
           </div>
           <div id="content"></div>
         </main>
       </div>`;
     this.shadowRoot.querySelectorAll(".nav button").forEach((b) =>
       b.addEventListener("click", () => this._navigate(b.dataset.id)));
+    this.shadowRoot.getElementById("manualRefresh").addEventListener("click", () => this.refresh());
   }
 
   _renderLive() {

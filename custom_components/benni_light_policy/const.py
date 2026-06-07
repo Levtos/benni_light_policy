@@ -100,7 +100,7 @@ SEASONS: Final = (SEASON_SPRING, SEASON_SUMMER, SEASON_AUTUMN, SEASON_WINTER)
 
 # Event-Themes (THEME_MAP-Ziele) zusätzlich zu den Jahreszeiten — zusammen die
 # Zeilen der Tagesphasen-Matrix (Theme × Phase → Look).
-POLICY_EVENT_THEMES: Final = ("christmas", "easter", "halloween")
+POLICY_EVENT_THEMES: Final = ("christmas", "easter", "halloween", "carnival")
 POLICY_THEMES: Final = (*SEASONS, *POLICY_EVENT_THEMES)
 # Feste Policy-Modi, die einen Look-Ref brauchen (keine Tagesphasen-Matrix).
 POLICY_FIXED_MODES: Final = ("cinema", "private_time", "waking", "work_home")
@@ -243,6 +243,7 @@ CONF_SCENE_TRANSITION_SECONDS: Final = "scene_transition_seconds"
 CONF_SCENE_INTERVAL_SECONDS: Final = "scene_interval_seconds"
 CONF_LUX_THRESHOLDS: Final = "lux_thresholds"          # dict season -> {dark, bright}
 CONF_BRIGHTNESS: Final = "brightness_profile"          # dict mode/phase -> 0..255
+CONF_CUSTOM_THEMES: Final = "custom_themes"            # list[str] zusätzliche Matrix-Zeilen
 # Zentrale Look-Map: policy_key -> Look-Ref (Slug ODER Name aus benni_scene_presets).
 # Löst die Tagesphasen-/Modus-Keys (Unterstriche) auf echte Look-Refs auf, statt auf
 # harte Namenskonventionen zu vertrauen. Mehrere Keys dürfen denselben Look nutzen.
@@ -381,3 +382,5 @@ WS_GET_LOOK_MAP: Final = f"{DOMAIN}/get_look_map"
 WS_SET_LOOK_MAP: Final = f"{DOMAIN}/set_look_map"
 WS_SET_SUBENTRY_MAPPINGS: Final = f"{DOMAIN}/set_subentry_mappings"
 WS_SET_APPLY_ENABLED: Final = f"{DOMAIN}/set_apply_enabled"
+WS_SET_BRIGHTNESS_PROFILE: Final = f"{DOMAIN}/set_brightness_profile"
+WS_SET_CUSTOM_THEMES: Final = f"{DOMAIN}/set_custom_themes"

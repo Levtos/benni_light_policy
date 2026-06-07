@@ -1,5 +1,5 @@
-// Tab 4 — Spezialregeln: Gaming/Musik-Subentries, classifier_value → Look.
-// Auto-Save (konsistent mit Look-Mapping & Matrix).
+// Tab 5 — Spezialregeln: Gaming/Musik-Subentries, classifier_value → Look.
+// Änderungen werden je Regel explizit gespeichert.
 import { esc, chip } from "../styles.js";
 import { lookSelectHTML } from "../components/look-select.js";
 
@@ -49,11 +49,12 @@ export function render(el, ctx) {
       try {
         await store.setSubentryMappings(subId, mappings);
         ctx.toast("Spezialregel gespeichert");
-        setTimeout(ctx.refresh, 600);
+        const rule = (store.status.subentry_rules || []).find((r) => r.subentry_id === subId);
+        if (rule) rule.mappings = mappings;
+        ctx.rerender();
       } catch (err) { ctx.toast("Fehler: " + (err.message || err)); }
     };
-    cardEl.querySelectorAll(".map-val, .look-select, .look-input").forEach((node) =>
-      node.addEventListener("change", save));
+    cardEl.querySelector(".save-rule").addEventListener("click", save);
   });
 }
 
@@ -88,7 +89,7 @@ function card(r, store, hass, looksOk) {
     <div class="card rule-card" data-sub="${esc(r.subentry_id)}">
       <h2><span class="ico">${TYPE_ICON[r.type] || "🎯"}</span>${esc(r._name)}
         <span class="sub">${esc(TYPE_LABEL[r.type] || r.type)}</span></h2>
-      <div class="kv"><span class="k">Classifier</span>
+      <div class="kv"><span class="k">Zielsensor</span>
         <span class="subtext">${esc(r.classifier_entity || "—")}</span></div>
       <div class="kv"><span class="k">Aktueller Wert</span>
         <span class="v">${curVal != null ? `<span class="mono">${esc(curVal)}</span>` : `<span class="muted">—</span>`}</span></div>
@@ -98,6 +99,8 @@ function card(r, store, hass, looksOk) {
         <thead><tr><th>Classifier-Wert</th><th>Look</th><th></th></tr></thead>
         <tbody>${rows}${emptyRow}</tbody>
       </table>
-      <p class="subtext" style="margin-top:8px">Änderungen werden automatisch gespeichert.</p>
+      <div class="row-actions">
+        <button class="btn primary save-rule">Spezialregel speichern</button>
+      </div>
     </div>`;
 }

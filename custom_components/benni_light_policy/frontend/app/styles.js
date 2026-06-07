@@ -40,6 +40,7 @@ export const CSS = `
 .head h1 { font-size: 24px; margin: 0; color: var(--purple); }
 .head p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
 .head .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 
 .grid { display: grid; gap: 14px; }
 .cols-2 { grid-template-columns: repeat(2, 1fr); }
@@ -79,7 +80,7 @@ export const CSS = `
 button.btn { background: var(--card2); color: var(--fg); border: 1px solid var(--line); border-radius: 9px; padding: 8px 13px; cursor: pointer; font-size: 13px; }
 button.btn:hover { border-color: var(--purple); }
 button.btn.primary { background: linear-gradient(135deg, var(--purple), #9d7cf0); border-color: transparent; color: #1a1b26; font-weight: 600; }
-select, input[type=text] { background: var(--bg2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13px; width: 100%; }
+select, input[type=text], input[type=number] { background: var(--bg2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 13px; width: 100%; }
 select:focus, input:focus { outline: 0; border-color: var(--purple); }
 
 table { width: 100%; border-collapse: collapse; }
@@ -122,6 +123,8 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .dot.ok { background: var(--green); } .dot.fallback { background: var(--faint); }
 .dot.warn { background: var(--yellow); } .dot.error { background: var(--red); }
 .tcell .ph { font-size: 10px; color: var(--faint); }
+.cell-bri { margin-top: 4px; text-align: center; font-size: 11px; color: var(--cyan); }
+.cell-bri.inherited { color: var(--faint); }
 
 /* Modal / Popover für Look-Auswahl */
 .modal-bg { position: fixed; inset: 0; background: rgba(10,11,18,.62); display: grid; place-items: center; z-index: 60; }
@@ -129,6 +132,9 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
   box-shadow: 0 18px 60px rgba(0,0,0,.5); }
 .modal h3 { margin: 0 0 4px; font-size: 15px; }
 .modal .row { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+.row-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.brightness-table { min-width: 980px; }
+.brightness-table input { min-width: 72px; }
 `;
 
 // Status-Chip (ok/warn/error/info) als HTML-String.

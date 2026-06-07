@@ -13,7 +13,7 @@ export const PHASE_LABELS = {
 };
 export const THEME_LABELS = {
   spring: "Frühling", summer: "Sommer", autumn: "Herbst", winter: "Winter",
-  christmas: "Weihnachten", easter: "Ostern", halloween: "Halloween",
+  christmas: "Weihnachten", easter: "Ostern", halloween: "Halloween", carnival: "Karneval",
 };
 export const MODE_LABELS = {
   cinema: "Cinema", private_time: "Private Time", waking: "Wecklicht", work_home: "Work-Home",
@@ -119,6 +119,24 @@ export class Store {
 
   async setApplyEnabled(enabled) {
     return this._ws({ type: `${DOMAIN}/set_apply_enabled`, enabled });
+  }
+
+  async setBrightnessProfile(brightnessProfile) {
+    const res = await this._ws({
+      type: `${DOMAIN}/set_brightness_profile`,
+      brightness_profile: brightnessProfile,
+    });
+    if (this.status) this.status.brightness_profile = res.brightness_profile || {};
+    return res;
+  }
+
+  async setCustomThemes(customThemes) {
+    const res = await this._ws({
+      type: `${DOMAIN}/set_custom_themes`,
+      custom_themes: customThemes,
+    });
+    if (this.catalog) this.catalog.custom_themes = res.custom_themes || [];
+    return res;
   }
 
   // Tatsächlich laufender Look-Switch-State (aus den HA-Entities).

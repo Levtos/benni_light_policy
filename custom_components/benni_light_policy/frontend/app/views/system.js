@@ -45,6 +45,9 @@ export function render(el, ctx) {
             store.scenePresetsAvailable() ? "benni_scene_presets" : "nicht erreichbar")}</span></div>
         <a class="btn" style="display:inline-block;margin-top:10px;text-decoration:none"
            href="/config/integrations/integration/benni_light_policy" target="_top">Integration-Einstellungen öffnen →</a>
+        <div class="row-actions">
+          <button class="btn primary" id="saveApply">Apply speichern</button>
+        </div>
       </div>
 
       <div class="card" style="grid-column: span 2;">
@@ -54,11 +57,13 @@ export function render(el, ctx) {
     </div>`;
 
   const tgl = el.querySelector("#applyTgl");
-  if (tgl) tgl.addEventListener("change", async (e) => {
+  const saveApply = el.querySelector("#saveApply");
+  if (tgl && saveApply) saveApply.addEventListener("click", async () => {
     try {
-      await store.setApplyEnabled(e.target.checked);
-      ctx.toast(`Apply ${e.target.checked ? "aktiviert" : "deaktiviert"}`);
-      setTimeout(ctx.refresh, 600);
+      await store.setApplyEnabled(tgl.checked);
+      if (store.status) store.status.apply_enabled = tgl.checked;
+      ctx.toast(`Apply ${tgl.checked ? "aktiviert" : "deaktiviert"}`);
+      ctx.rerender();
     } catch (err) {
       ctx.toast("Fehler: " + (err.message || err));
     }
