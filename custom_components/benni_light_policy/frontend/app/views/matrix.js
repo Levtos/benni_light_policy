@@ -24,7 +24,12 @@ export function render(el, ctx) {
   const body = themes.map((t) => {
     const cells = phases.map((p) => {
       const key = `${t}_${p}`;
-      return `<td>${coverageCellHTML(key, store.coverage(key))}</td>`;
+      const value = bri[key] != null ? bri[key] : bri[p];
+      const inherited = bri[key] == null;
+      return `<td>${coverageCellHTML(key, store.coverage(key))}
+        <div class="cell-bri ${inherited ? "inherited" : ""}">${
+          value != null ? Math.round((value / 255) * 100) + " %" : "—"
+        }</div></td>`;
     }).join("");
     return `<tr><td><b>${esc(THEME_LABELS[t] || t)}</b></td>${cells}</tr>`;
   }).join("");
@@ -75,7 +80,7 @@ export function render(el, ctx) {
       try {
         await store.setLookMap(map);
         ctx.toast(value ? "Look gespeichert" : "Mapping entfernt");
-        setTimeout(ctx.refresh, 500);
+        ctx.rerender();
       } catch (err) { ctx.toast("Fehler: " + (err.message || err)); }
     };
     host.querySelector('[data-act="save"]').addEventListener("click", () =>

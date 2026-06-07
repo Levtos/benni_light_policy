@@ -32,22 +32,28 @@ export function render(el, ctx) {
         <thead><tr><th>Modus</th><th>Look</th><th>Coverage</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      <div class="row-actions">
+        <button class="btn primary" id="saveLookMap">Look-Mapping speichern</button>
+      </div>
       <p class="muted" style="font-size:12px;margin-top:12px">
         Mehrere Keys dürfen denselben Look nutzen. „kein Mapping" fällt auf den Key-Namen als Look-Ref zurück
         (nur falls ein Look exakt so heißt). Tagesphasen-Looks bearbeitest du in der Matrix.</p>
     </div>`;
 
-  const onChange = async (key, value) => {
+  const saveAll = async () => {
     const map = { ...store.lookMap };
-    if (value) map[key] = value; else delete map[key];
+    el.querySelectorAll(".look-select, .look-input").forEach((node) => {
+      const key = node.dataset.key;
+      const value = node.value.trim();
+      if (value) map[key] = value; else delete map[key];
+    });
     try {
       await store.setLookMap(map);
-      ctx.toast(value ? "Mapping gespeichert" : "Mapping entfernt");
-      setTimeout(ctx.refresh, 500);
+      ctx.toast("Look-Mapping gespeichert");
+      ctx.rerender();
     } catch (err) {
       ctx.toast("Fehler: " + (err.message || err));
     }
   };
-  el.querySelectorAll(".look-select, .look-input").forEach((node) =>
-    node.addEventListener("change", () => onChange(node.dataset.key, node.value.trim())));
+  el.querySelector("#saveLookMap").addEventListener("click", saveAll);
 }

@@ -188,6 +188,25 @@ def test_event_theme_overrides_season():
     assert p.preset_enum == "christmas_early_evening"
 
 
+def test_carnival_event_theme_overrides_season():
+    p = _decide(_ctx(
+        activity_state=C.ACTIVITY_IDLE,
+        day_state="early_evening",
+        season=C.SEASON_AUTUMN,
+        calendar_theme="karneval",
+    ))
+    assert p.preset_enum == "carnival_early_evening"
+
+
+def test_theme_phase_brightness_overrides_phase_default():
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_IDLE, day_state="late_night", season=C.SEASON_WINTER),
+        brightness_profile={"late_night": 100, "winter_late_night": 42},
+    )
+    assert p.preset_enum == "winter_late_night"
+    assert p.brightness == 42
+
+
 # ---------------------------------------------------------------- gating overlay
 def test_apply_disabled_blocks_without_changing_plan():
     p = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME), apply_enabled=False)

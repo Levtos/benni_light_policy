@@ -44,6 +44,7 @@ from .const import (
     CONF_CALENDAR_THEME,
     CONF_CLASSIFIER_ENTITY,
     CONF_CROSSFADE_SECONDS,
+    CONF_CUSTOM_THEMES,
     CONF_DAY_STATE,
     CONF_ENTERTAINMENT_STABLE,
     CONF_GROUP_ALL,
@@ -78,11 +79,13 @@ from .const import (
     DEFAULT_LUX_THRESHOLDS,
     DEFAULT_SCENE_INTERVAL_SECONDS,
     DEFAULT_STARTUP_BLOCK_SECONDS,
+    DAY_PHASES,
     SEASON_WINTER,
     GROUP_ALL,
     GROUP_CEILING,
     GROUP_MAIN,
     PHASE_EARLY_MORNING,
+    POLICY_THEMES,
     PRESENCE_TRANSITION_COMING_HOME,
     SCENE_PRESETS_DOMAIN,
     SUBENTRY_GAMING,
@@ -141,6 +144,7 @@ class LightPolicyCoordinator:
         self._lux_history: list[tuple[float, float]] = []  # (monotonic_ts, lux)
 
         self._last_plan: policy.Plan | None = None
+        self._last_applied_hash: str | None = None  # hash actually pushed to lights
         self._last_apply_ts = 0.0
         self._apply_task: asyncio.Task | None = None
 
@@ -181,6 +185,18 @@ class LightPolicyCoordinator:
         """Zentrale Map policy_key -> Look-Ref (Slug/Name). Aus den Options."""
         raw = self._opt(CONF_LOOK_MAP) or {}
         return dict(raw) if isinstance(raw, dict) else {}
+
+    @property
+    def custom_themes(self) -> tuple[str, ...]:
+        raw = self._opt(CONF_CUSTOM_THEMES) or ()
+        if not isinstance(raw, (list, tuple)):
+            return ()
+        out: list[str] = []
+        for item in raw:
+            value = str(item).strip().lower()
+            if value and value not in out:
+                out.append(value)
+        return tuple(out)
 
     def resolve_look_ref(self, policy_key: str | None) -> str | None:
         """policy_key -> Look-Ref. Map gewinnt; sonst Key selbst (Fallback ohne
@@ -323,6 +339,7 @@ class LightPolicyCoordinator:
             presence_transition=self._read(CONF_PRESENCE_TRANSITION),
             lux=_float_or_none(self._read(CONF_LUX)),
             weather=self._read(CONF_WEATHER),
+            custom_themes=self.custom_themes,
         )
 
     # ----- evaluation -----
@@ -371,13 +388,14 @@ class LightPolicyCoordinator:
             self._manual_off = False
         self._prev_bio = ctx.bio_state
 
-        # R12 Heimkommen: coming_home-Flanke erzwingt einen Re-Apply (last_plan reset),
-        # damit das Licht sofort sitzt, auch wenn presence_personal erst gleich umflippt.
+        # R12 Heimkommen: coming_home-Flanke erzwingt einen Re-Apply (applied-hash
+        # reset), damit das Licht sofort sitzt, auch wenn presence_personal erst
+        # gleich umflippt.
         if (
             self._prev_presence_transition != PRESENCE_TRANSITION_COMING_HOME
             and ctx.presence_transition == PRESENCE_TRANSITION_COMING_HOME
         ):
-            self._last_plan = None
+            self._last_applied_hash = None
         self._prev_presence_transition = ctx.presence_transition
 
         plan = policy.decide(
@@ -390,10 +408,17 @@ class LightPolicyCoordinator:
             extra_policies=self._build_extra_policies(),
         )
 
-        hash_changed = self._last_plan is None or self._last_plan.scene_hash != plan.scene_hash
+        # Re-apply is keyed on the last *applied* hash, not the last *decided*
+        # plan. Otherwise a plan that was decided but blocked (startup gate,
+        # apply disabled, manual-off) marks the hash as "seen", so when the gate
+        # later clears with an unchanged hash it never applies — e.g. after an HA
+        # restart the dynamic scenes/looks are gone (they live only in RAM) but
+        # the policy thinks nothing changed and never re-applies the look.
+        hash_changed = self._last_applied_hash != plan.scene_hash
         self._last_plan = plan
 
         if plan.apply_allowed and hash_changed:
+            self._last_applied_hash = plan.scene_hash
             self._schedule_apply(plan)
 
         await self._async_save()
@@ -487,6 +512,7 @@ class LightPolicyCoordinator:
             if plan.apply_kind == APPLY_CCT and not plan.preset_enum:
                 if not plan.raw_targets:
                     _LOGGER.warning("light_policy: %s ohne konfigurierte Targets", plan.mode)
+                    self._last_applied_hash = None  # nichts angewandt → nächster Tick retry
                     return
                 await self.hass.services.async_call(
                     "light", "turn_on",
@@ -510,9 +536,10 @@ class LightPolicyCoordinator:
                 _LOGGER.warning(
                     "light_policy: apply übersprungen — keine Look-Ref (mode=%s)", plan.mode
                 )
+                self._last_applied_hash = None  # nichts angewandt → nächster Tick retry
                 return
             data: dict[str, Any] = {SP_ATTR_LOOK: look_ref}
-            if plan.brightness:
+            if plan.brightness is not None:
                 data[SP_ATTR_BRIGHTNESS] = plan.brightness
             await self.hass.services.async_call(
                 SCENE_PRESETS_DOMAIN, SP_SERVICE_APPLY_LOOK, data, blocking=False,
@@ -521,6 +548,7 @@ class LightPolicyCoordinator:
             raise
         except Exception as err:  # noqa: BLE001 - ein fehlgeschlagener Apply darf den Loop nicht killen
             _LOGGER.warning("light_policy: apply failed: %s", err)
+            self._last_applied_hash = None  # Apply gescheitert → nächster Tick retry
 
     async def _turn_off(self, targets: list[str]) -> None:
         if not targets:
@@ -531,7 +559,7 @@ class LightPolicyCoordinator:
 
     # ----- service surface -----
     async def async_apply_now(self) -> policy.Plan:
-        self._last_plan = None  # erzwingt hash_changed → Re-Apply
+        self._last_applied_hash = None  # erzwingt hash_changed → Re-Apply
         return await self.async_evaluate()
 
     async def async_set_manual_off(self) -> None:
@@ -559,6 +587,42 @@ class LightPolicyCoordinator:
         new_options = {**self.entry.options, CONF_LOOK_MAP: cleaned}
         self.hass.config_entries.async_update_entry(self.entry, options=new_options)
         return cleaned
+
+    async def async_set_brightness_profile(self, profile: dict[str, Any]) -> dict[str, int]:
+        """Speichert Helligkeiten als Options. Keys sind phase/mode oder theme_phase."""
+        allowed = set(DEFAULT_BRIGHTNESS) | {
+            f"{theme}_{phase}"
+            for theme in (*POLICY_THEMES, *self.custom_themes)
+            for phase in DAY_PHASES
+        }
+        # Existing look-map themes from the frontend may include built-in themes too.
+        for key in self.look_map:
+            if key.endswith(tuple(DAY_PHASES)):
+                allowed.add(key)
+
+        cleaned: dict[str, int] = {}
+        for key, raw in (profile or {}).items():
+            skey = str(key).strip()
+            if skey not in allowed:
+                continue
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                continue
+            cleaned[skey] = max(0, min(255, value))
+        new_options = {**self.entry.options, CONF_BRIGHTNESS: cleaned}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        return {**DEFAULT_BRIGHTNESS, **cleaned}
+
+    async def async_set_custom_themes(self, themes: list[str]) -> tuple[str, ...]:
+        cleaned: list[str] = []
+        for item in themes or []:
+            value = str(item).strip().lower().replace(" ", "_")
+            if value and value not in cleaned:
+                cleaned.append(value)
+        new_options = {**self.entry.options, CONF_CUSTOM_THEMES: cleaned}
+        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        return tuple(cleaned)
 
     async def async_set_subentry_mappings(
         self, subentry_id: str, mappings: dict[str, str]
@@ -588,8 +652,11 @@ class LightPolicyCoordinator:
         return self._read(CONF_ACTIVITY_STATE)
 
     def brightness_for(self, key: str | None) -> int | None:
-        profile = {**DEFAULT_BRIGHTNESS, **(self._opt(CONF_BRIGHTNESS) or {})}
-        return profile.get(key) if key else None
+        return self.brightness_profile().get(key) if key else None
+
+    def brightness_profile(self) -> dict[str, int]:
+        raw = self._opt(CONF_BRIGHTNESS) or {}
+        return {**DEFAULT_BRIGHTNESS, **(raw if isinstance(raw, dict) else {})}
 
     def lux_gate_on(self) -> bool:
         return bool(self._prev_lux_gate)

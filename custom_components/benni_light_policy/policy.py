@@ -69,6 +69,9 @@ THEME_MAP = {
     "weihnachten": "christmas",
     "ostern": "easter",
     "halloween": "halloween",
+    "karneval": "carnival",
+    "fasching": "carnival",
+    "carnival": "carnival",
 }
 # Party-Musik-Enums sind noch nicht definiert (Lastenheft OQ-2) — bis dahin
 # triggert music_party nicht.
@@ -94,6 +97,7 @@ class Context:
     lux: float | None = None
     weather: str | None = None
     master_phase: str | None = None
+    custom_themes: tuple[str, ...] = ()
     # Spider-Web: aus benni_media_context — kein eigenes Power-/Source-Tracking.
     media_device: str | None = None         # "pc"/"ps5"/"nintendo"/"tv"/"none"
     media_context: str | None = None        # "gaming"/"tv"/"streaming"/"private_time"/"idle"
@@ -237,9 +241,12 @@ def weather_darkness(
 # --------------------------------------------------------------------------- #
 def _effective_theme(ctx: Context) -> str:
     """Event-Thema gewinnt über Jahreszeit, sonst Jahreszeit (Fallback winter)."""
-    mapped = THEME_MAP.get((ctx.calendar_theme or "").lower())
+    calendar_theme = (ctx.calendar_theme or "").lower()
+    mapped = THEME_MAP.get(calendar_theme)
     if mapped:
         return mapped
+    if calendar_theme in ctx.custom_themes:
+        return calendar_theme
     return ctx.season or SEASON_WINTER
 
 
@@ -249,6 +256,12 @@ def _phase_preset(ctx: Context, phase: str) -> str:
 
 def _brightness(profile: dict[str, int], key: str) -> int | None:
     return profile.get(key)
+
+
+def _phase_brightness(ctx: Context, profile: dict[str, int], phase: str) -> int | None:
+    """Theme-specific phase brightness wins over the global phase default."""
+    theme_key = f"{_effective_theme(ctx)}_{phase}"
+    return profile.get(theme_key, profile.get(phase))
 
 
 # --------------------------------------------------------------------------- #
@@ -323,7 +336,7 @@ def _eval_household(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan |
     phase = _awake_phase(ctx) or "early_evening"
     return Plan(
         mode=MODE_HOUSEHOLD, preset_enum=_phase_preset(ctx, phase),
-        brightness=_brightness(profile, phase), color_temp=None,
+        brightness=_phase_brightness(ctx, profile, phase), color_temp=None,
         apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=gate,
         reason=f"household: activity=household, phase={phase}",
     )
@@ -341,7 +354,7 @@ def _eval_presence_sim(ctx: Context, gate: bool, profile: dict[str, int]) -> Pla
         return None
     return Plan(
         mode=MODE_PRESENCE_SIM, preset_enum=_phase_preset(ctx, awake_phase),
-        brightness=_brightness(profile, awake_phase), color_temp=None,
+        brightness=_phase_brightness(ctx, profile, awake_phase), color_temp=None,
         apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=gate,
         reason=f"presence_sim: presence={ctx.presence_personal}, phase={awake_phase}",
     )
@@ -367,7 +380,7 @@ def _eval_dayphase(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan:
     phase = _awake_phase(ctx) or "early_evening"
     return Plan(
         mode=phase, preset_enum=_phase_preset(ctx, phase),
-        brightness=_brightness(profile, phase), color_temp=None,
+        brightness=_phase_brightness(ctx, profile, phase), color_temp=None,
         apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], lux_gate_on=gate,
         reason=f"dayphase fallback: {phase}",
     )

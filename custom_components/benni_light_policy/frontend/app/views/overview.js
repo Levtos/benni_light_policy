@@ -102,15 +102,20 @@ export function render(el, ctx) {
           <span class="v">${chip(s.manual_off ? "warn" : "ok", s.manual_off ? "aktiv" : "inaktiv")}</span></div>
         <div class="kv"><span class="k">Bettgeh-Signal (R16)</span>
           <span class="v">${chip(s.bedtime_active ? "info" : "ok", s.bedtime_active ? "aktiv" : "inaktiv")}</span></div>
+        <div class="row-actions">
+          <button class="btn primary" id="saveApply">Apply speichern</button>
+        </div>
       </div>
     </div>`;
 
   el.querySelector("#toMap").addEventListener("click", () => ctx.navigate("look-mapping"));
-  el.querySelector("#applyTgl").addEventListener("change", async (e) => {
+  el.querySelector("#saveApply").addEventListener("click", async () => {
+    const checked = el.querySelector("#applyTgl").checked;
     try {
-      await store.setApplyEnabled(e.target.checked);
-      ctx.toast(`Apply ${e.target.checked ? "aktiviert" : "deaktiviert"}`);
-      setTimeout(ctx.refresh, 600);
+      await store.setApplyEnabled(checked);
+      if (store.status) store.status.apply_enabled = checked;
+      ctx.toast(`Apply ${checked ? "aktiviert" : "deaktiviert"}`);
+      ctx.rerender();
     } catch (err) { ctx.toast("Fehler: " + (err.message || err)); }
   });
 }

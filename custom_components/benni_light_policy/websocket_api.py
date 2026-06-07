@@ -45,6 +45,8 @@ from .const import (
     WS_GET_LOOK_MAP,
     WS_GET_STATUS,
     WS_SET_APPLY_ENABLED,
+    WS_SET_BRIGHTNESS_PROFILE,
+    WS_SET_CUSTOM_THEMES,
     WS_SET_LOOK_MAP,
     WS_SET_SUBENTRY_MAPPINGS,
 )
@@ -75,9 +77,9 @@ def _coordinator(hass: HomeAssistant):
     return None
 
 
-def matrix_keys() -> list[str]:
+def matrix_keys(themes: list[str] | tuple[str, ...] | None = None) -> list[str]:
     """Alle Tagesphasen-Matrix-Keys (theme_phase)."""
-    return [f"{theme}_{phase}" for theme in POLICY_THEMES for phase in DAY_PHASES]
+    return [f"{theme}_{phase}" for theme in (themes or POLICY_THEMES) for phase in DAY_PHASES]
 
 
 def _entity_ready(hass: HomeAssistant, eid: str | None) -> bool:
@@ -158,20 +160,21 @@ def _status(hass: HomeAssistant, coord) -> dict[str, Any]:
         "subentry_rules": _subentry_rules(coord),
         "areas": _area_rules(coord),
         "brightness_profile": {
-            **{p: coord.brightness_for(p) for p in DAY_PHASES},
-            **{m: coord.brightness_for(m) for m in ("waking", "work_home", "private_time")},
+            **coord.brightness_profile(),
         },
     }
 
 
 def _catalog(coord) -> dict[str, Any]:
     """Soll-Keys, die einen Look brauchen, + aktuelle Look-Map."""
+    themes = [*POLICY_THEMES, *coord.custom_themes]
     return {
         "look_map": coord.look_map,
         "fixed_modes": list(POLICY_FIXED_MODES),
-        "themes": list(POLICY_THEMES),
+        "themes": themes,
+        "custom_themes": list(coord.custom_themes),
         "phases": list(DAY_PHASES),
-        "matrix_keys": matrix_keys(),
+        "matrix_keys": matrix_keys(themes),
         "subentry_rules": _subentry_rules(coord),
     }
 
@@ -244,8 +247,38 @@ def async_setup_websocket_api(hass: HomeAssistant) -> None:
         await coord.async_set_apply_enabled(msg["enabled"])
         connection.send_result(msg["id"], {"apply_enabled": msg["enabled"]})
 
+    @websocket_api.websocket_command({
+        vol.Required("type"): WS_SET_BRIGHTNESS_PROFILE,
+        vol.Required("brightness_profile"): {str: vol.Any(int, str, None)},
+    })
+    @websocket_api.require_admin
+    @websocket_api.async_response
+    async def ws_set_brightness_profile(hass, connection, msg) -> None:
+        coord = _coordinator(hass)
+        if coord is None:
+            connection.send_error(msg["id"], "not_ready", "Light Policy not loaded")
+            return
+        cleaned = await coord.async_set_brightness_profile(msg["brightness_profile"])
+        connection.send_result(msg["id"], {"brightness_profile": cleaned})
+
+    @websocket_api.websocket_command({
+        vol.Required("type"): WS_SET_CUSTOM_THEMES,
+        vol.Required("custom_themes"): [str],
+    })
+    @websocket_api.require_admin
+    @websocket_api.async_response
+    async def ws_set_custom_themes(hass, connection, msg) -> None:
+        coord = _coordinator(hass)
+        if coord is None:
+            connection.send_error(msg["id"], "not_ready", "Light Policy not loaded")
+            return
+        cleaned = await coord.async_set_custom_themes(msg["custom_themes"])
+        connection.send_result(msg["id"], {"custom_themes": list(cleaned)})
+
     websocket_api.async_register_command(hass, ws_get_status)
     websocket_api.async_register_command(hass, ws_get_look_map)
     websocket_api.async_register_command(hass, ws_set_look_map)
     websocket_api.async_register_command(hass, ws_set_subentry_mappings)
     websocket_api.async_register_command(hass, ws_set_apply_enabled)
+    websocket_api.async_register_command(hass, ws_set_brightness_profile)
+    websocket_api.async_register_command(hass, ws_set_custom_themes)
