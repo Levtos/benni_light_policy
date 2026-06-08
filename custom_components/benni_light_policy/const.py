@@ -188,6 +188,10 @@ GAMING_DEFAULT_PRIORITY: Final[dict[str, int]] = {
 # Cinema feuert nur, wenn media_context auf TV-artige Kontexte zeigt
 # (Spec-Tightening: §4.1 sagt nur entertainment_stable, das war zu lose).
 TV_MEDIA_CONTEXTS: Final = frozenset({"tv", "streaming"})
+# media_device-Wert, der einen Fernseher als aktive Quelle meldet (AppleTV/Video-Apps
+# laufen über media_context = "streaming"). Dient als zweites positives TV-Signal,
+# falls media_context (noch) nicht verdrahtet ist.
+MEDIA_DEVICE_TV: Final = "tv"
 
 # Toolbox-Auto-Prefill: Hub-Foundation-Felder werden mit den bekannten
 # Singleton-Entity-IDs der Benni-Toolbox vorbelegt (falls vorhanden) — der User
@@ -255,6 +259,9 @@ CONF_LOOK_MAP: Final = "look_map"
 DEFAULT_APPLY_ENABLED: Final = False        # Shadow-safe out of the box (Phase-4).
 DEFAULT_STARTUP_BLOCK_SECONDS: Final = 15   # HA-Start-Delay.
 DEFAULT_CROSSFADE_SECONDS: Final = 30
+# Reine Brightness-Änderung (selber Look) → kurzer Fade statt Look-Default-Crossfade,
+# damit Helligkeits-Edits im UX sofort sichtbar werden (nicht erst nach 60 s).
+BRIGHTNESS_CHANGE_TRANSITION_SECONDS: Final = 2
 DEFAULT_SCENE_TRANSITION_SECONDS: Final = 300
 DEFAULT_SCENE_INTERVAL_SECONDS: Final = 300
 
@@ -363,6 +370,7 @@ SP_SERVICE_APPLY_LOOK: Final = "apply_look"
 SP_SERVICE_STOP_LOOK: Final = "stop_look"
 SP_ATTR_LOOK: Final = "look"          # Service-Feld: Look-Name oder -Slug
 SP_ATTR_BRIGHTNESS: Final = "brightness"
+SP_ATTR_TRANSITION: Final = "transition"  # First-Paint-Fade-Override (s); leer = Look-Default
 # WS-Command des Forks, über das das Panel die echten Looks (Slug+Name) holt.
 SP_WS_LIST_LOOKS: Final = "benni_scene_presets/list_looks"
 

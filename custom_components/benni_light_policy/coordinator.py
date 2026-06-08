@@ -97,6 +97,8 @@ from .const import (
     SP_SERVICE_APPLY_LOOK,
     SP_ATTR_LOOK,
     SP_ATTR_BRIGHTNESS,
+    SP_ATTR_TRANSITION,
+    BRIGHTNESS_CHANGE_TRANSITION_SECONDS,
 )
 from .policy import APPLY_CCT, APPLY_OFF, APPLY_SCENE
 from .storage import make_store
@@ -145,6 +147,10 @@ class LightPolicyCoordinator:
 
         self._last_plan: policy.Plan | None = None
         self._last_applied_hash: str | None = None  # hash actually pushed to lights
+        # Überlebt den Reload (persistiert): erlaubt „selber Look, andere Brightness"-
+        # Erkennung → kurzer Fade statt Look-Default-Crossfade.
+        self._last_applied_look_ref: str | None = None
+        self._last_applied_brightness: int | None = None
         self._last_apply_ts = 0.0
         self._apply_task: asyncio.Task | None = None
 
@@ -289,6 +295,8 @@ class LightPolicyCoordinator:
         self._prev_bio = raw.get("prev_bio")
         self._tmc_set = bool(raw.get("tmc_set", False))
         self._prev_day_state = raw.get("prev_day_state")
+        self._last_applied_look_ref = raw.get("last_applied_look_ref")
+        self._last_applied_brightness = raw.get("last_applied_brightness")
 
     async def _async_save(self) -> None:
         await self._store.async_save({
@@ -297,6 +305,8 @@ class LightPolicyCoordinator:
             "prev_bio": self._prev_bio,
             "tmc_set": self._tmc_set,
             "prev_day_state": self._prev_day_state,
+            "last_applied_look_ref": self._last_applied_look_ref,
+            "last_applied_brightness": self._last_applied_brightness,
             "last_plan": self._last_plan.as_dict() if self._last_plan else None,
         })
 
@@ -418,8 +428,18 @@ class LightPolicyCoordinator:
         self._last_plan = plan
 
         if plan.apply_allowed and hash_changed:
+            look_ref = self.resolve_look_ref(plan.preset_enum)
+            # „Selber Look, andere Brightness" → kurzer Fade (sofort sichtbar),
+            # statt des langen Look-Crossfades, der für Look-WECHSEL gedacht ist.
+            brightness_only = (
+                look_ref is not None
+                and look_ref == self._last_applied_look_ref
+                and plan.brightness != self._last_applied_brightness
+            )
             self._last_applied_hash = plan.scene_hash
-            self._schedule_apply(plan)
+            self._last_applied_look_ref = look_ref
+            self._last_applied_brightness = plan.brightness
+            self._schedule_apply(plan, brightness_only=brightness_only)
 
         await self._async_save()
         for cb in self._listeners:
@@ -491,13 +511,15 @@ class LightPolicyCoordinator:
         seen: set[str] = set()
         return [e for e in out if not (e in seen or seen.add(e))]
 
-    def _schedule_apply(self, plan: policy.Plan) -> None:
+    def _schedule_apply(self, plan: policy.Plan, *, brightness_only: bool = False) -> None:
         # mode: restart — laufenden Crossfade abbrechen, neuen starten.
         if self._apply_task and not self._apply_task.done():
             self._apply_task.cancel()
-        self._apply_task = self.hass.async_create_task(self._apply(plan))
+        self._apply_task = self.hass.async_create_task(
+            self._apply(plan, brightness_only=brightness_only)
+        )
 
-    async def _apply(self, plan: policy.Plan) -> None:
+    async def _apply(self, plan: policy.Plan, *, brightness_only: bool = False) -> None:
         try:
             self._last_apply_ts = time.monotonic()
 
@@ -541,6 +563,10 @@ class LightPolicyCoordinator:
             data: dict[str, Any] = {SP_ATTR_LOOK: look_ref}
             if plan.brightness is not None:
                 data[SP_ATTR_BRIGHTNESS] = plan.brightness
+            # Reine Brightness-Änderung am selben Look: kurzer Fade, damit der neue
+            # Wert sofort sichtbar wird (statt des langen Look-Default-Crossfades).
+            if brightness_only:
+                data[SP_ATTR_TRANSITION] = BRIGHTNESS_CHANGE_TRANSITION_SECONDS
             await self.hass.services.async_call(
                 SCENE_PRESETS_DOMAIN, SP_SERVICE_APPLY_LOOK, data, blocking=False,
             )

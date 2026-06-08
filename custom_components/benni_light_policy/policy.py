@@ -35,6 +35,7 @@ from .const import (
     GROUP_CEILING,
     GROUP_MAIN,
     MASTER_PHASE_DAYTIME,
+    MEDIA_DEVICE_TV,
     MODE_CINEMA,
     MODE_HOUSEHOLD,
     MODE_IDLE,
@@ -361,13 +362,20 @@ def _eval_presence_sim(ctx: Context, gate: bool, profile: dict[str, int]) -> Pla
 
 
 def _eval_cinema(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
-    """Cinema = TV-Watching. Spec-Tightening: media_context muss TV-artig sein,
-    sonst feuert das für jedes Entertainment (z.B. Gaming am PC). Wenn der Hub
-    media_context nicht verdrahtet hat (None): Backward-Compat — wie alte Regel."""
+    """Cinema = TV-Watching. Spec-Tightening: braucht ein *positives* TV-Signal,
+    sonst kapert es jedes Entertainment (z.B. Gaming am PC) — `entertainment_stable`
+    allein ist zu grob. TV-Signal = media_context ∈ {tv, streaming} ODER
+    media_device == "tv". Backward-Compat: nur wenn WEDER media_context NOCH
+    media_device verdrahtet ist (beide None), gilt die alte lose Regel."""
     if not (ctx.entertainment_stable and not ctx.guest):
         return None
-    if ctx.media_context is not None and ctx.media_context not in TV_MEDIA_CONTEXTS:
-        return None
+    if ctx.media_context is not None or ctx.media_device is not None:
+        tv_signal = (
+            ctx.media_context in TV_MEDIA_CONTEXTS
+            or ctx.media_device == MEDIA_DEVICE_TV
+        )
+        if not tv_signal:
+            return None
     return Plan(
         mode=MODE_CINEMA, preset_enum=MODE_CINEMA, brightness=None, color_temp=None,
         apply_kind=APPLY_SCENE, targets=[GROUP_MAIN], exclusive_off=[GROUP_CEILING],

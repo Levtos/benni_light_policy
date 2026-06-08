@@ -340,6 +340,17 @@ def test_cinema_requires_tv_media_context():
     assert _decide(_ctx(**base)).mode == C.MODE_CINEMA
 
 
+def test_cinema_not_hijacked_by_gaming_media_device():
+    # Regression: media_context (noch) nicht verdrahtet, aber media_device verrät
+    # eine Gaming-Quelle → Cinema darf NICHT feuern (sonst kapert PC-Betrieb das
+    # Wohnzimmerlicht, weil Cinema-Prio über PC-Gaming liegt).
+    base = dict(entertainment_stable=True, activity_state=C.ACTIVITY_FREE_TIME,
+                day_state="late_evening")
+    assert _decide(_ctx(media_device="pc", **base)).mode != C.MODE_CINEMA
+    # media_device meldet TV → positives Signal → Cinema feuert auch ohne media_context.
+    assert _decide(_ctx(media_device="tv", **base)).mode == C.MODE_CINEMA
+
+
 def test_dayphase_policy_is_terminal():
     # Letzte Policy liefert immer einen Plan (kein None).
     last = P.LIVING_ROOM_POLICIES[-1]
