@@ -270,6 +270,21 @@ def test_gaming_subentry_policy_wins_over_dayphase():
     assert p.preset_enum == "games_overwatch_2"
 
 
+def test_gaming_brightness_follows_dayphase_profile():
+    # Regression: Gaming-Look muss die Tagesphasen-/Theme-Helligkeit nutzen,
+    # nicht None (sonst scene_presets-Default 255). Bug 2026-06-09.
+    pol = P.make_gaming_policy("pc", "2", {"2": "overwatch"})
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="late_night",
+             season=C.SEASON_SUMMER, media_device="pc"),
+        extra_policies=[pol],
+        brightness_profile={"late_night": 100, "summer_late_night": 80},
+    )
+    assert p.mode == "gaming:pc:2"
+    assert p.preset_enum == "overwatch"
+    assert p.brightness == 80  # theme_phase-Override gewinnt; NICHT None/255
+
+
 def test_gaming_subentry_inactive_when_source_not_active():
     # Gleiche Subentry, aber media_device zeigt nicht auf "pc" → kein Match.
     pol = P.make_gaming_policy("pc", "ow", {"ow": "games_overwatch_2"})

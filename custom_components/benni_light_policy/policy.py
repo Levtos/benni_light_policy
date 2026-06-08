@@ -457,11 +457,16 @@ def make_gaming_policy(
         preset = mappings.get(classifier_value or "")
         if not preset:
             return None
+        # Brightness wie bei den Tagesphasen-Modi aus dem Profil (theme_phase) —
+        # Gaming-Looks sollen die Tageszeit-/Theme-Helligkeit respektieren, nicht
+        # auf der Preset-Default (255) landen. (Doku: „Brightness aus der Tagesphase".)
+        phase = _awake_phase(ctx) or "early_evening"
         return Plan(
             mode=f"gaming:{source_id}:{classifier_value}", preset_enum=preset,
-            brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
+            brightness=_phase_brightness(ctx, profile, phase),
+            color_temp=None, apply_kind=APPLY_SCENE,
             targets=[target], lux_gate_on=gate,
-            reason=f"gaming:{source_id}: classifier={classifier_value} → {preset}",
+            reason=f"gaming:{source_id}: classifier={classifier_value} → {preset} @{phase}",
         )
 
     return PolicyDef(f"gaming_{source_id}", priority, _ev)
@@ -487,11 +492,13 @@ def make_music_policy(
         preset = mappings.get(classifier_value or "")
         if not preset:
             return None
+        phase = _awake_phase(ctx) or "early_evening"
         return Plan(
             mode=MODE_MUSIC_PARTY, preset_enum=preset,
-            brightness=None, color_temp=None, apply_kind=APPLY_SCENE,
+            brightness=_phase_brightness(ctx, profile, phase),
+            color_temp=None, apply_kind=APPLY_SCENE,
             targets=[target], lux_gate_on=gate,
-            reason=f"music: classifier={classifier_value} → {preset}",
+            reason=f"music: classifier={classifier_value} → {preset} @{phase}",
         )
 
     return PolicyDef("music_party", priority, _ev)
