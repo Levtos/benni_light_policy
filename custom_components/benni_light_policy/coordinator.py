@@ -86,6 +86,7 @@ from .const import (
     GROUP_MAIN,
     PHASE_EARLY_MORNING,
     POLICY_THEMES,
+    POLICY_FIXED_MODES,
     PRESENCE_TRANSITION_COMING_HOME,
     SCENE_PRESETS_DOMAIN,
     SUBENTRY_GAMING,
@@ -95,6 +96,7 @@ from .const import (
     TMC_TRIGGER_LUX,
     WEATHER_DARK_WINDOW_SECONDS,
     SP_SERVICE_APPLY_LOOK,
+    SP_SERVICE_STOP_LOOK,
     SP_ATTR_LOOK,
     SP_ATTR_BRIGHTNESS,
     SP_ATTR_TRANSITION,
@@ -211,6 +213,49 @@ class LightPolicyCoordinator:
             return None
         mapped = self.look_map.get(policy_key)
         return mapped.strip() if isinstance(mapped, str) and mapped.strip() else policy_key
+
+    def _policy_managed_look_refs(self) -> list[str]:
+        """Look-Refs that may be controlled by this policy.
+
+        Scene Presets can also host manually started looks/effects. Only stop
+        refs that belong to the policy catalog or policy subentry mappings.
+        """
+        refs: dict[str, str] = {}
+
+        def add(ref: Any) -> None:
+            if not isinstance(ref, str):
+                return
+            value = ref.strip()
+            if value:
+                refs.setdefault(value.casefold(), value)
+
+        for key in POLICY_FIXED_MODES:
+            add(self.resolve_look_ref(key))
+
+        for theme in (*POLICY_THEMES, *self.custom_themes):
+            for phase in DAY_PHASES:
+                add(self.resolve_look_ref(f"{theme}_{phase}"))
+
+        for key in self.look_map:
+            add(self.resolve_look_ref(key))
+
+        for sub in self.entry.subentries.values():
+            if sub.subentry_type not in (SUBENTRY_GAMING, SUBENTRY_MUSIC):
+                continue
+            mappings = sub.data.get(CONF_MAPPINGS) or {}
+            if isinstance(mappings, dict):
+                for ref in mappings.values():
+                    add(ref)
+
+        return list(refs.values())
+
+    @staticmethod
+    def _look_switch_entity_id(look_ref: str) -> str:
+        return f"switch.benni_look_{look_ref.replace('-', '_')}"
+
+    def _scene_presets_look_is_on(self, look_ref: str) -> bool:
+        state = self.hass.states.get(self._look_switch_entity_id(look_ref))
+        return state is not None and state.state == "on"
 
     def _startup_ready(self) -> bool:
         if not self._ha_started:
@@ -545,7 +590,10 @@ class LightPolicyCoordinator:
             self._last_apply_ts = time.monotonic()
 
             if plan.apply_kind == APPLY_OFF:
-                await self._stop_scene_presets_look(previous_look_ref)
+                await self._stop_scene_presets_policy_looks(
+                    keep_look_ref=None,
+                    previous_look_ref=previous_look_ref,
+                )
                 await self._turn_off(
                     self._resolve_targets([GROUP_ALL])
                     or self._resolve_targets(plan.exclusive_off)
@@ -558,7 +606,10 @@ class LightPolicyCoordinator:
                     _LOGGER.warning("light_policy: %s ohne konfigurierte Targets", plan.mode)
                     self._last_applied_hash = None  # nichts angewandt → nächster Tick retry
                     return
-                await self._stop_scene_presets_look(previous_look_ref)
+                await self._stop_scene_presets_policy_looks(
+                    keep_look_ref=None,
+                    previous_look_ref=previous_look_ref,
+                )
                 await self.hass.services.async_call(
                     "light", "turn_on",
                     {
@@ -590,8 +641,10 @@ class LightPolicyCoordinator:
             # Wert sofort sichtbar wird (statt des langen Look-Default-Crossfades).
             if brightness_only:
                 data[SP_ATTR_TRANSITION] = BRIGHTNESS_CHANGE_TRANSITION_SECONDS
-            if previous_look_ref and previous_look_ref != look_ref:
-                await self._stop_scene_presets_look(previous_look_ref)
+            await self._stop_scene_presets_policy_looks(
+                keep_look_ref=look_ref,
+                previous_look_ref=previous_look_ref,
+            )
             await self.hass.services.async_call(
                 SCENE_PRESETS_DOMAIN, SP_SERVICE_APPLY_LOOK, data, blocking=False,
             )
@@ -613,6 +666,30 @@ class LightPolicyCoordinator:
             )
         except Exception as err:  # noqa: BLE001 - Stop ist best effort vor Apply/Off
             _LOGGER.warning("light_policy: could not stop previous look %s: %s", look_ref, err)
+
+    async def _stop_scene_presets_policy_looks(
+        self,
+        *,
+        keep_look_ref: str | None,
+        previous_look_ref: str | None,
+    ) -> None:
+        keep = keep_look_ref.casefold() if keep_look_ref else None
+        refs: dict[str, str] = {}
+
+        def add(ref: str | None) -> None:
+            if not ref:
+                return
+            value = ref.strip()
+            if value and value.casefold() != keep:
+                refs.setdefault(value.casefold(), value)
+
+        add(previous_look_ref)
+        for ref in self._policy_managed_look_refs():
+            if ref == previous_look_ref or self._scene_presets_look_is_on(ref):
+                add(ref)
+
+        for ref in refs.values():
+            await self._stop_scene_presets_look(ref)
 
     async def _turn_off(self, targets: list[str]) -> None:
         if not targets:
