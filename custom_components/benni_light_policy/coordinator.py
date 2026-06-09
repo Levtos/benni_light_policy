@@ -429,17 +429,22 @@ class LightPolicyCoordinator:
 
         if plan.apply_allowed and hash_changed:
             look_ref = self.resolve_look_ref(plan.preset_enum)
+            previous_look_ref = self._last_applied_look_ref
             # „Selber Look, andere Brightness" → kurzer Fade (sofort sichtbar),
             # statt des langen Look-Crossfades, der für Look-WECHSEL gedacht ist.
             brightness_only = (
                 look_ref is not None
-                and look_ref == self._last_applied_look_ref
+                and look_ref == previous_look_ref
                 and plan.brightness != self._last_applied_brightness
             )
             self._last_applied_hash = plan.scene_hash
             self._last_applied_look_ref = look_ref
             self._last_applied_brightness = plan.brightness
-            self._schedule_apply(plan, brightness_only=brightness_only)
+            self._schedule_apply(
+                plan,
+                brightness_only=brightness_only,
+                previous_look_ref=previous_look_ref,
+            )
 
         await self._async_save()
         for cb in self._listeners:
@@ -511,19 +516,36 @@ class LightPolicyCoordinator:
         seen: set[str] = set()
         return [e for e in out if not (e in seen or seen.add(e))]
 
-    def _schedule_apply(self, plan: policy.Plan, *, brightness_only: bool = False) -> None:
+    def _schedule_apply(
+        self,
+        plan: policy.Plan,
+        *,
+        brightness_only: bool = False,
+        previous_look_ref: str | None = None,
+    ) -> None:
         # mode: restart — laufenden Crossfade abbrechen, neuen starten.
         if self._apply_task and not self._apply_task.done():
             self._apply_task.cancel()
         self._apply_task = self.hass.async_create_task(
-            self._apply(plan, brightness_only=brightness_only)
+            self._apply(
+                plan,
+                brightness_only=brightness_only,
+                previous_look_ref=previous_look_ref,
+            )
         )
 
-    async def _apply(self, plan: policy.Plan, *, brightness_only: bool = False) -> None:
+    async def _apply(
+        self,
+        plan: policy.Plan,
+        *,
+        brightness_only: bool = False,
+        previous_look_ref: str | None = None,
+    ) -> None:
         try:
             self._last_apply_ts = time.monotonic()
 
             if plan.apply_kind == APPLY_OFF:
+                await self._stop_scene_presets_look(previous_look_ref)
                 await self._turn_off(
                     self._resolve_targets([GROUP_ALL])
                     or self._resolve_targets(plan.exclusive_off)
@@ -536,6 +558,7 @@ class LightPolicyCoordinator:
                     _LOGGER.warning("light_policy: %s ohne konfigurierte Targets", plan.mode)
                     self._last_applied_hash = None  # nichts angewandt → nächster Tick retry
                     return
+                await self._stop_scene_presets_look(previous_look_ref)
                 await self.hass.services.async_call(
                     "light", "turn_on",
                     {
@@ -567,6 +590,8 @@ class LightPolicyCoordinator:
             # Wert sofort sichtbar wird (statt des langen Look-Default-Crossfades).
             if brightness_only:
                 data[SP_ATTR_TRANSITION] = BRIGHTNESS_CHANGE_TRANSITION_SECONDS
+            if previous_look_ref and previous_look_ref != look_ref:
+                await self._stop_scene_presets_look(previous_look_ref)
             await self.hass.services.async_call(
                 SCENE_PRESETS_DOMAIN, SP_SERVICE_APPLY_LOOK, data, blocking=False,
             )
@@ -575,6 +600,19 @@ class LightPolicyCoordinator:
         except Exception as err:  # noqa: BLE001 - ein fehlgeschlagener Apply darf den Loop nicht killen
             _LOGGER.warning("light_policy: apply failed: %s", err)
             self._last_applied_hash = None  # Apply gescheitert → nächster Tick retry
+
+    async def _stop_scene_presets_look(self, look_ref: str | None) -> None:
+        if not look_ref:
+            return
+        try:
+            await self.hass.services.async_call(
+                SCENE_PRESETS_DOMAIN,
+                SP_SERVICE_STOP_LOOK,
+                {SP_ATTR_LOOK: look_ref},
+                blocking=True,
+            )
+        except Exception as err:  # noqa: BLE001 - Stop ist best effort vor Apply/Off
+            _LOGGER.warning("light_policy: could not stop previous look %s: %s", look_ref, err)
 
     async def _turn_off(self, targets: list[str]) -> None:
         if not targets:
