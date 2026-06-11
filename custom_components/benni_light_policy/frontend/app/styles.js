@@ -110,18 +110,10 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .legend { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .legend span.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; }
 
-/* Kompakte Matrix-Zellen (statt 56 Dropdowns) */
+/* Matrix-Tabelle */
 .matrix table { min-width: 880px; }
 .matrix th, .matrix td { padding: 5px 6px; }
-.mcell { display: flex; flex-direction: column; gap: 2px; align-items: stretch; min-width: 92px;
-  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; cursor: pointer; background: var(--card); transition: .12s; }
-.mcell:hover { border-color: var(--purple); background: var(--card2); }
-.mcell .nm { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mcell .st { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
-.mcell .st .dot { width: 7px; height: 7px; border-radius: 50%; }
-.mcell.ok { } .mcell.fallback { border-style: dashed; }
-.dot.ok { background: var(--green); } .dot.fallback { background: var(--faint); }
-.dot.warn { background: var(--yellow); } .dot.error { background: var(--red); }
+.dot.ok { background: var(--green); } .dot.error { background: var(--red); }
 .tcell .ph { font-size: 10px; color: var(--faint); }
 .cell-bri { margin-top: 4px; text-align: center; font-size: 11px; color: var(--cyan); }
 .cell-bri.inherited { color: var(--faint); }

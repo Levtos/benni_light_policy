@@ -58,16 +58,3 @@ export function coverageChip(cov) {
   const m = KIND_META[cov.kind] || KIND_META.missing;
   return chip(m.chip, m.label);
 }
-
-// Kompakte, klickbare Matrix-Zelle: kurzer Look-Name + Status-Punkt, kein Dropdown.
-export function coverageCellHTML(key, cov, dataAttrs = {}) {
-  const m = KIND_META[cov.kind] || KIND_META.missing;
-  const attrs = Object.entries({ "data-key": key, ...dataAttrs })
-    .map(([k, v]) => `${k}="${esc(v)}"`).join(" ");
-  const name = cov.look ? (cov.look.name || cov.look.slug) : (cov.kind === "invalid" ? cov.ref : "—");
-  const titleFallback = cov.kind === "fallback" ? ` title="Kein Mapping — Key „${esc(key)}" wird direkt als Look-Ref versucht."` : "";
-  return `<div class="mcell ${cov.kind}" ${attrs}${titleFallback}>
-    <span class="nm">${esc(name)}</span>
-    <span class="st"><span class="dot ${m.dot}"></span>${m.label}</span>
-  </div>`;
-}
