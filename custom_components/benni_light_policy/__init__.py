@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 
 from .const import (
     DATA_COORDINATOR,
+    DATA_SKIP_RELOAD_COUNT,
     DOMAIN,
     SERVICE_APPLY_NOW,
     SERVICE_CLEAR_MANUAL_OFF,
@@ -51,6 +52,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    data = hass.data.setdefault(DOMAIN, {})
+    skip_count = int(data.get(DATA_SKIP_RELOAD_COUNT) or 0)
+    if skip_count > 0:
+        data[DATA_SKIP_RELOAD_COUNT] = skip_count - 1
+        return
     await hass.config_entries.async_reload(entry.entry_id)
 
 

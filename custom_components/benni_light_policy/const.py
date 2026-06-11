@@ -19,6 +19,7 @@ MODULE_ID: Final[str] = "light_policy"
 
 # Datenwurzel in hass.data[DOMAIN].
 DATA_COORDINATOR: Final[str] = "coordinator"
+DATA_SKIP_RELOAD_COUNT: Final[str] = "skip_reload_count"
 
 STORAGE_VERSION: Final[int] = 1
 

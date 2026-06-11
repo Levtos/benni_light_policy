@@ -72,6 +72,7 @@ from .const import (
     CONF_TRIGGER_VALUE,
     CONF_WAKE_UP_TARGETS,
     CONF_WEATHER,
+    DATA_SKIP_RELOAD_COUNT,
     GAMING_DEFAULT_PRIORITY,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_BRIGHTNESS,
@@ -80,6 +81,7 @@ from .const import (
     DEFAULT_SCENE_INTERVAL_SECONDS,
     DEFAULT_STARTUP_BLOCK_SECONDS,
     DAY_PHASES,
+    DOMAIN,
     SEASON_WINTER,
     GROUP_ALL,
     GROUP_CEILING,
@@ -256,6 +258,19 @@ class LightPolicyCoordinator:
     def _scene_presets_look_is_on(self, look_ref: str) -> bool:
         state = self.hass.states.get(self._look_switch_entity_id(look_ref))
         return state is not None and state.state == "on"
+
+    def _skip_next_entry_reload(self) -> None:
+        data = self.hass.data.setdefault(DOMAIN, {})
+        data[DATA_SKIP_RELOAD_COUNT] = int(data.get(DATA_SKIP_RELOAD_COUNT) or 0) + 1
+
+    def _async_update_entry_options_runtime(self, options: dict[str, Any]) -> None:
+        self._skip_next_entry_reload()
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
+
+    async def _async_runtime_setting_changed(self, *, force_reapply: bool) -> None:
+        if force_reapply:
+            self._last_applied_hash = None
+        await self.async_evaluate()
 
     def _startup_ready(self) -> bool:
         if not self._ha_started:
@@ -712,21 +727,22 @@ class LightPolicyCoordinator:
         await self.async_evaluate()
 
     async def async_set_apply_enabled(self, value: bool) -> None:
-        """Apply zur Laufzeit an/aus (vom Apply-Switch). Schreibt in die Options →
-        Update-Listener lädt den Entry neu, der neue Coordinator liest den Wert."""
+        """Apply zur Laufzeit an/aus (vom Apply-Switch)."""
         new_options = {**self.entry.options, CONF_APPLY_ENABLED: bool(value)}
-        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        self._async_update_entry_options_runtime(new_options)
+        await self._async_runtime_setting_changed(force_reapply=bool(value))
 
     async def async_set_look_map(self, mapping: dict[str, str]) -> dict[str, str]:
         """Zentrale Look-Map schreiben (policy_key -> Look-Ref). Leere Werte werden
-        entfernt (= Mapping gelöscht). Schreibt in die Options → Reload-Listener."""
+        entfernt (= Mapping gelöscht)."""
         cleaned = {
             str(k): str(v).strip()
             for k, v in (mapping or {}).items()
             if isinstance(v, str) and v.strip()
         }
         new_options = {**self.entry.options, CONF_LOOK_MAP: cleaned}
-        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        self._async_update_entry_options_runtime(new_options)
+        await self._async_runtime_setting_changed(force_reapply=True)
         return cleaned
 
     async def async_set_brightness_profile(self, profile: dict[str, Any]) -> dict[str, int]:
@@ -752,7 +768,8 @@ class LightPolicyCoordinator:
                 continue
             cleaned[skey] = max(0, min(255, value))
         new_options = {**self.entry.options, CONF_BRIGHTNESS: cleaned}
-        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        self._async_update_entry_options_runtime(new_options)
+        await self._async_runtime_setting_changed(force_reapply=True)
         return {**DEFAULT_BRIGHTNESS, **cleaned}
 
     async def async_set_custom_themes(self, themes: list[str]) -> tuple[str, ...]:
@@ -762,7 +779,8 @@ class LightPolicyCoordinator:
             if value and value not in cleaned:
                 cleaned.append(value)
         new_options = {**self.entry.options, CONF_CUSTOM_THEMES: cleaned}
-        self.hass.config_entries.async_update_entry(self.entry, options=new_options)
+        self._async_update_entry_options_runtime(new_options)
+        await self._async_runtime_setting_changed(force_reapply=False)
         return tuple(cleaned)
 
     async def async_set_subentry_mappings(
@@ -779,7 +797,9 @@ class LightPolicyCoordinator:
             if str(k).strip() and isinstance(v, str) and v.strip()
         }
         new_data = {**sub.data, CONF_MAPPINGS: cleaned}
+        self._skip_next_entry_reload()
         self.hass.config_entries.async_update_subentry(self.entry, sub, data=new_data)
+        await self._async_runtime_setting_changed(force_reapply=True)
         return cleaned
 
     # ----- helpers für Bereichs-Controller -----
