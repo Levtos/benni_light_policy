@@ -99,7 +99,7 @@ class Context:
     weather: str | None = None
     master_phase: str | None = None
     custom_themes: tuple[str, ...] = ()
-    # Spider-Web: aus benni_media_context — kein eigenes Power-/Source-Tracking.
+    # Spider-Web: aus benni_media_state — kein eigenes Power-/Source-Tracking.
     media_device: str | None = None         # "pc"/"ps5"/"nintendo"/"tv"/"none"
     media_context: str | None = None        # "gaming"/"tv"/"streaming"/"private_time"/"idle"
 

@@ -123,7 +123,7 @@
       "step": {
         "user": {
           "title": "Gaming-Minihub (z.B. PC / PS5 / Nintendo)",
-          "description": "Eine Subentry pro Quelle. Hub liest media_device (aus benni_media_context) → matched gegen source_id. Pro Quelle bis zu 8 Enum-Werte → Look-Slug/-Name. Konflikt bei mehreren aktiven Quellen wird über source_priority gelöst (kleiner = höher; PS5=9, Nintendo=10, Cinema=11, PC=12).",
+          "description": "Eine Subentry pro Quelle. Hub liest media_device (aus benni_media_state) → matched gegen source_id. Pro Quelle bis zu 8 Enum-Werte → Look-Slug/-Name. Konflikt bei mehreren aktiven Quellen wird über source_priority gelöst (kleiner = höher; PS5=9, Nintendo=10, Cinema=11, PC=12).",
           "data": {
             "name": "Name (z.B. „Gaming PC“)",
             "source_id": "Source-ID (matched media_device: pc / ps5 / nintendo)",

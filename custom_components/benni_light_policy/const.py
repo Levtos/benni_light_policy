@@ -1,7 +1,7 @@
 """Konstanten der Benni-Light-Policy.
 
 Eigenständige HA-Integration (eigene Domain), erstes Aggregat-Modul. Konsumiert
-Foundation-Sensoren (benni_core_*, benni_context, benni_media_context) AUSSCHLIESSLICH
+Foundation-Sensoren (benni_core_*, benni_context, benni_media_state) AUSSCHLIESSLICH
 als HA-Entity-IDs aus dem Config-Flow — kein Python-Cross-Modul-Import.
 
 Apply läuft im Coordinator, gated an `apply_enabled` (wie cover_policy). Die
@@ -125,7 +125,7 @@ CONF_OVERNIGHT_AWAY: Final = "overnight_away_entity"
 CONF_SYSTEM_READY: Final = "system_ready_entity"
 CONF_WEATHER: Final = "weather_entity"
 CONF_PRESENCE_TRANSITION: Final = "presence_transition_entity"
-# Spider-web-Konsum aus benni_media_context: welche Quelle ist aktiv (pc/ps5/…)
+# Spider-web-Konsum aus benni_media_state: welche Quelle ist aktiv (pc/ps5/…)
 # und in welchem Modus (gaming/tv/streaming/…). Lebt im Hub, einmal verdrahtet.
 CONF_MEDIA_DEVICE: Final = "media_device_entity"
 CONF_MEDIA_CONTEXT: Final = "media_context_entity"
@@ -208,9 +208,11 @@ ENTITY_PREFILL: Final[dict[str, str]] = {
     CONF_PRESENCE_TRANSITION: "sensor.benni_context_presence_transition",
     CONF_CALENDAR_THEME: "sensor.benni_context_day_context",
     CONF_LUX: "sensor.garden_illuminance_atomic",
-    CONF_ENTERTAINMENT_STABLE: "binary_sensor.benni_media_context_entertainment_active",
-    CONF_MEDIA_DEVICE: "sensor.benni_media_context_media_device",
-    CONF_MEDIA_CONTEXT: "sensor.benni_media_context_media_context",
+    # FLEET-36 Cut-over: Media-Truth kommt jetzt aus benni_media_state (L1-Feeder,
+    # B2-Gate-Fix) statt aus dem alten Toolbox-Monolith benni_media_context.
+    CONF_ENTERTAINMENT_STABLE: "binary_sensor.benni_media_state_entertainment_active",
+    CONF_MEDIA_DEVICE: "sensor.benni_media_state_media_device",
+    CONF_MEDIA_CONTEXT: "sensor.benni_media_state_media_context",
     CONF_SYSTEM_READY: "binary_sensor.system_benni_context_ready",
     CONF_SEASON: "sensor.weather_season_meteorological_atomic",
 }

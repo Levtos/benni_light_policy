@@ -12,7 +12,7 @@
 
 ## Konsumiert (Bahn B — hängt an Extraktions-Pipeline)
 - **Theme-Detection** (Kalender/Season/berechnete Feste Ostern/Karneval) → kommt aus dem Context-Layer (`benni_core_state`), wird hier nur als Entity konsumiert. Die **Matrix** `theme×phase→look_ref+brightness` bleibt hier.
-- **media_context** (Cinema/Gaming) → kommt aus `benni_media_context` (nach dessen Extraktion).
+- **media_context** (Cinema/Gaming) → kommt aus `benni_media_state` (FLEET-36 Cut-over; vorher Toolbox-`benni_media_context`).
 
 ## A1 Brightness — Befund (2026-06-08, live verifiziert)
 **Kein Übertragungs-Bug.** End-to-end verifiziert intakt: Wert (`_phase_brightness`, theme-aware) → Hash (triggert Re-Apply) → Reload-Trigger (`add_update_listener`) → `apply_look {look, brightness}` → scene_presets honoriert den Override (Live-Test: `brightness:30` vs `255` greift sichtbar). Gating live ok (`switch.light_policy_apply_enabled=on`, `apply_blocked=off`).
@@ -30,9 +30,9 @@ Die als „Brightness kommt nicht an" wahrgenommene Sache reduziert sich auf:
 
 **Code-Härtung ✅ erledigt 2026-06-08** (`_eval_cinema`): Cinema verlangt jetzt ein *positives* TV-Signal (`media_context ∈ {tv,streaming}` ODER `media_device == "tv"`); Backward-Compat nur noch, wenn **beide** Quellen unverdrahtet (None). Neuer Regression-Test `test_cinema_not_hijacked_by_gaming_media_device`. 45 Tests grün.
 
-**Offene Config-Aktion (User):** im Hub-Options-Flow (Environment-Schritt) setzen:
-- `media_context_entity` → `sensor.benni_media_context_media_context`
-- `media_device_entity` → `sensor.benni_media_context_media_device` (statt `sensor.stash_active_streams`) — fixt zusätzlich die Gaming-Subentries.
+**Erledigt via `ENTITY_PREFILL` (Code) + FLEET-36 Cut-over:** Die Media-Bindings sind im Code vorbelegt (kein Options-Setzen nötig) und zeigen seit FLEET-36 auf `benni_media_state`:
+- `media_context_entity` → `sensor.benni_media_state_media_context`
+- `media_device_entity` → `sensor.benni_media_state_media_device` — fixt zusätzlich die Gaming-Subentries.
 
 ## UX
 Eigenes Panel (`blp-app`) bleibt **dünn/Wegwerf** — wandert später in die zentrale Umbrella-UX. Wertvoll ist der **WS-Contract**, nicht das Frontend.
