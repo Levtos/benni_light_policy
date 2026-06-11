@@ -1,7 +1,7 @@
 {
   "domain": "benni_light_policy",
   "name": "Benni Light Policy",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "documentation": "https://github.com/Levtos/benni_light_policy",
   "issue_tracker": "https://github.com/Levtos/benni_light_policy/issues",
   "codeowners": ["@Levtos"],
@@ -9,6 +9,6 @@
   "iot_class": "calculated",
   "integration_type": "service",
   "dependencies": ["http", "websocket_api", "frontend"],
-  "after_dependencies": ["benni_scene_presets"],
+  "after_dependencies": ["benni_scene_presets", "benni_media_state"],
   "requirements": []
 }
