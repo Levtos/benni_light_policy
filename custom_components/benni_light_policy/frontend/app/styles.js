@@ -126,6 +126,13 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .cell-bri { margin-top: 4px; text-align: center; font-size: 11px; color: var(--cyan); }
 .cell-bri.inherited { color: var(--faint); }
 
+/* Inline-Look-Select pro Matrix-Zelle (ersetzt den früheren Modal) */
+.mx-cell { vertical-align: top; min-width: 150px; }
+.mx-cell .look-select, .mx-cell .look-input { width: 100%; font-size: 12px; padding: 5px 6px; }
+.mx-cell.fallback .look-select { border-style: dashed; }
+.mx-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px; }
+.mx-meta .cell-bri { margin-top: 0; }
+
 /* Modal / Popover für Look-Auswahl */
 .modal-bg { position: fixed; inset: 0; background: rgba(10,11,18,.62); display: grid; place-items: center; z-index: 60; }
 .modal { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(440px, 92vw);

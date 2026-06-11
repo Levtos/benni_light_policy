@@ -2,6 +2,24 @@
 // Kein Freitext/UUID, solange die Look-Liste verfügbar ist.
 import { esc, chip } from "../styles.js";
 
+const LOOK_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+const UNCATEGORIZED = "Ohne Kategorie";
+
+function sortedLookGroups(looks) {
+  const groups = new Map();
+  for (const look of looks || []) {
+    const category = String(look.category || UNCATEGORIZED).trim() || UNCATEGORIZED;
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(look);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => LOOK_COLLATOR.compare(a, b))
+    .map(([category, items]) => [
+      category,
+      items.sort((a, b) => LOOK_COLLATOR.compare(a.name || a.slug || "", b.name || b.slug || "")),
+    ]);
+}
+
 // dataAttrs: z.B. {"data-key": "winter_late_evening"} → das aufrufende View hört per change.
 export function lookSelectHTML(currentRef, looks, dataAttrs = {}) {
   const attrs = Object.entries(dataAttrs)
@@ -15,9 +33,12 @@ export function lookSelectHTML(currentRef, looks, dataAttrs = {}) {
 
   const known = looks.some((l) => l.slug === currentRef || l.name === currentRef);
   const opts = [`<option value="">— kein Look —</option>`];
-  for (const l of looks) {
-    const sel = l.slug === currentRef || l.name === currentRef ? "selected" : "";
-    opts.push(`<option value="${esc(l.slug)}" ${sel}>${esc(l.name || l.slug)}</option>`);
+  for (const [category, items] of sortedLookGroups(looks)) {
+    const group = items.map((l) => {
+      const sel = l.slug === currentRef || l.name === currentRef ? "selected" : "";
+      return `<option value="${esc(l.slug)}" ${sel}>${esc(l.name || l.slug)}</option>`;
+    }).join("");
+    opts.push(`<optgroup label="${esc(category)}">${group}</optgroup>`);
   }
   if (currentRef && !known) {
     opts.push(`<option value="${esc(currentRef)}" selected>⚠ ${esc(currentRef)} (fehlt)</option>`);

@@ -1,9 +1,9 @@
 // Tab 3 — Tagesphasen-Matrix: Themes (Zeilen) × Phasen (Spalten) → Look.
-// Kompakte, klickbare Zellen (Status + kurzer Look-Name); Look-Auswahl per Modal.
-// Helligkeit kommt aus dem Tagesphasen-Profil und wird getrennt vom Look gezeigt.
+// Look-Auswahl per inline-Select direkt in der Zelle (kein Modal); Änderung wird
+// sofort gespeichert. Helligkeit kommt aus dem Tagesphasen-Profil und wird separat gezeigt.
 import { esc, chip } from "../styles.js";
 import { PHASE_LABELS, THEME_LABELS } from "../store.js";
-import { lookSelectHTML, coverageCellHTML } from "../components/look-select.js";
+import { lookSelectHTML, coverageChip } from "../components/look-select.js";
 
 export function render(el, ctx) {
   const { store } = ctx;
@@ -24,12 +24,18 @@ export function render(el, ctx) {
   const body = themes.map((t) => {
     const cells = phases.map((p) => {
       const key = `${t}_${p}`;
+      const cov = store.coverage(key);
+      const cur = store.lookMap[key] || "";
       const value = bri[key] != null ? bri[key] : bri[p];
       const inherited = bri[key] == null;
-      return `<td>${coverageCellHTML(key, store.coverage(key))}
-        <div class="cell-bri ${inherited ? "inherited" : ""}">${
-          value != null ? Math.round((value / 255) * 100) + " %" : "—"
-        }</div></td>`;
+      return `<td class="mx-cell ${cov.kind}">
+        ${lookSelectHTML(cur, looksOk ? store.looks : null, { "data-key": key })}
+        <div class="mx-meta">
+          ${coverageChip(cov)}
+          <span class="cell-bri ${inherited ? "inherited" : ""}">${
+            value != null ? Math.round((value / 255) * 100) + " %" : "—"
+          }</span>
+        </div></td>`;
     }).join("");
     return `<tr><td><b>${esc(THEME_LABELS[t] || t)}</b></td>${cells}</tr>`;
   }).join("");
@@ -37,7 +43,7 @@ export function render(el, ctx) {
   el.innerHTML = `
     <div class="card matrix">
       <h2><span class="ico">▦</span>Tagesphasen-Matrix
-        <span class="sub">— Zelle anklicken, um einen Look zu wählen; Helligkeit kommt separat aus dem Profil</span></h2>
+        <span class="sub">— Look pro Zelle direkt wählen; Helligkeit kommt separat aus dem Profil</span></h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         ${chip("ok", "vorhanden")} ${chip("info", "Fallback (Key = Look-Ref)")}
         ${chip("warn", "fehlt")} ${chip("error", "ungültig")}
@@ -46,48 +52,22 @@ export function render(el, ctx) {
       <p class="muted" style="font-size:12px;margin-top:10px">
         Mehrere Zellen dürfen denselben Look nutzen. „Fallback" heißt: kein Mapping gesetzt — der
         Key-Name wird direkt als Look-Ref versucht.</p>
-    </div>
-    <div id="mx-modal"></div>`;
+    </div>`;
 
-  const openModal = (key) => {
-    const t = key.split("_").slice(0, -2).join("_") || key.split("_")[0];
-    const p = key.split("_").slice(-2).join("_");
-    const label = `${THEME_LABELS[t] || t} · ${PHASE_LABELS[p] || p}`;
-    const cur = store.lookMap[key] || "";
-    const host = el.querySelector("#mx-modal");
-    host.innerHTML = `
-      <div class="modal-bg">
-        <div class="modal">
-          <h3>${esc(label)}</h3>
-          <div class="subtext" style="margin-bottom:10px">${esc(key)}</div>
-          ${lookSelectHTML(cur, looksOk ? store.looks : null, { id: "mx-pick" })}
-          <div class="row">
-            <button class="btn" data-act="cancel">Abbrechen</button>
-            <button class="btn" data-act="clear">Kein Mapping</button>
-            <button class="btn primary" data-act="save">Speichern</button>
-          </div>
-        </div>
-      </div>`;
-    const close = () => (host.innerHTML = "");
-    host.querySelector(".modal-bg").addEventListener("click", (e) => {
-      if (e.target.classList.contains("modal-bg")) close();
-    });
-    host.querySelector('[data-act="cancel"]').addEventListener("click", close);
-    const save = async (value) => {
-      const map = { ...store.lookMap };
-      if (value) map[key] = value; else delete map[key];
-      close();
-      try {
-        await store.setLookMap(map);
-        ctx.toast(value ? "Look gespeichert" : "Mapping entfernt");
-        ctx.rerender();
-      } catch (err) { ctx.toast("Fehler: " + (err.message || err)); }
-    };
-    host.querySelector('[data-act="save"]').addEventListener("click", () =>
-      save((host.querySelector("#mx-pick").value || "").trim()));
-    host.querySelector('[data-act="clear"]').addEventListener("click", () => save(""));
+  const applyLook = async (key, value) => {
+    const map = { ...store.lookMap };
+    if (value) map[key] = value; else delete map[key];
+    try {
+      await store.setLookMap(map);
+      ctx.toast(value ? "Look gespeichert" : "Mapping entfernt");
+      ctx.rerender();
+    } catch (err) {
+      ctx.toast("Fehler: " + (err.message || err));
+      ctx.rerender(); // Select auf den gespeicherten Stand zurücksetzen
+    }
   };
 
-  el.querySelectorAll(".mcell").forEach((cell) =>
-    cell.addEventListener("click", () => openModal(cell.dataset.key)));
+  el.querySelectorAll(".look-select, .look-input").forEach((sel) =>
+    sel.addEventListener("change", (e) =>
+      applyLook(e.target.dataset.key, (e.target.value || "").trim())));
 }
