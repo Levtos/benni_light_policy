@@ -207,15 +207,15 @@ ENTITY_PREFILL: Final[dict[str, str]] = {
     CONF_PRESENCE_PERSONAL: "sensor.benni_context_presence_personal",
     CONF_PRESENCE_HOUSEHOLD: "sensor.benni_context_presence_household",
     CONF_PRESENCE_TRANSITION: "sensor.benni_context_presence_transition",
-    CONF_CALENDAR_THEME: "sensor.benni_context_day_context",
-    CONF_LUX: "sensor.garden_illuminance_atomic",
+    CONF_CALENDAR_THEME: "sensor.benni_core_state_day_context",
+    CONF_LUX: "sensor.benni_device_garden_lux",
     # FLEET-36 Cut-over: Media-Truth kommt jetzt aus benni_media_state (L1-Feeder,
     # B2-Gate-Fix) statt aus dem alten Toolbox-Monolith benni_media_context.
     CONF_ENTERTAINMENT_STABLE: "binary_sensor.benni_media_state_entertainment_active",
     CONF_MEDIA_DEVICE: "sensor.benni_media_state_media_device",
     CONF_MEDIA_CONTEXT: "sensor.benni_media_state_media_context",
     CONF_SYSTEM_READY: "binary_sensor.system_benni_context_ready",
-    CONF_SEASON: "sensor.weather_season_meteorological_atomic",
+    CONF_SEASON: "sensor.benni_device_weather_season_meteorological",
 }
 
 # Lampengruppen sind Mengen von Einzellampen (keine HA-Group-Entity vorhanden).
