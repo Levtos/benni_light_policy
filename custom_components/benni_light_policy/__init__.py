@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from .const import (
     DATA_COORDINATOR,
     DATA_SKIP_RELOAD_COUNT,
+    CONFIG_ENTRY_VERSION,
     DOMAIN,
     SERVICE_APPLY_NOW,
     SERVICE_CLEAR_MANUAL_OFF,
@@ -37,8 +38,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         dict(entry.options),
     )
     if changed:
-        hass.config_entries.async_update_entry(entry, data=data, options=options)
+        hass.config_entries.async_update_entry(
+            entry, data=data, options=options, version=CONFIG_ENTRY_VERSION
+        )
         _LOGGER.info("Migrated %s config entry away from retired source entities", DOMAIN)
+    elif entry.version != CONFIG_ENTRY_VERSION:
+        hass.config_entries.async_update_entry(entry, version=CONFIG_ENTRY_VERSION)
     return True
 
 

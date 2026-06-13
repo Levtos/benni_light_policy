@@ -2,6 +2,10 @@ import lp_const as C
 import lp_migration as M
 
 
+def test_config_entry_version_triggers_fleet54_migration() -> None:
+    assert C.CONFIG_ENTRY_VERSION == 2
+
+
 def test_migrate_legacy_entity_ids_updates_data_and_options() -> None:
     data = {
         C.CONF_CALENDAR_THEME: "sensor.benni_context_day_context",

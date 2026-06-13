@@ -64,6 +64,7 @@ from .const import (
     MAPPING_SLOT_COUNT,
     MAPPING_VALUE_PREFIX,
     CONF_WEATHER,
+    CONFIG_ENTRY_VERSION,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_CROSSFADE_SECONDS,
     DEFAULT_STARTUP_BLOCK_SECONDS,
@@ -202,7 +203,7 @@ def _prefilled(keys: tuple[str, ...], data: dict[str, Any], hass) -> dict[str, A
 # Hub Config-Flow
 # --------------------------------------------------------------------------- #
 class LightPolicyConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    VERSION = CONFIG_ENTRY_VERSION
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}

@@ -4,7 +4,7 @@ Licht-Policy als eigenständige HACS-Custom-Integration.
 
 ## FLEET-54 source migration
 
-Seit `0.2.3` migriert die Integration bekannte alte Toolbox/YAML-Quellen in
+Seit `0.2.4` migriert die Integration bekannte alte Toolbox/YAML-Quellen in
 bestehenden ConfigEntries automatisch auf die Core-Integrationen:
 
 - `sensor.garden_illuminance_atomic` -> `sensor.benni_device_garden_lux`
