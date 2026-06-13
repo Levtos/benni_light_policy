@@ -20,6 +20,7 @@ from .const import (
     SERVICE_SET_MANUAL_OFF,
 )
 from .coordinator import LightPolicyCoordinator
+from .migration import migrate_legacy_entity_ids
 from .view import async_remove_view, async_setup_view
 from .websocket_api import async_setup_websocket_api
 
@@ -27,6 +28,18 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 _WS_FLAG = "_ws_registered"
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate existing config entries away from retired FLEET-54 sources."""
+    data, options, changed = migrate_legacy_entity_ids(
+        dict(entry.data),
+        dict(entry.options),
+    )
+    if changed:
+        hass.config_entries.async_update_entry(entry, data=data, options=options)
+        _LOGGER.info("Migrated %s config entry away from retired source entities", DOMAIN)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

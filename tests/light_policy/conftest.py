@@ -1,4 +1,4 @@
-"""Lade die HA-freien Dateien (const.py, policy.py) als synthetisches Paket.
+"""Lade die HA-freien Dateien als synthetisches Paket.
 
 Vermeidet den HA-Import-Pfad: policy.py nutzt `from .const import ...`, was über
 das synthetische Paket `lp_pure_pkg` auf die geladene const.py auflöst.
@@ -31,6 +31,8 @@ def _load(modname: str, filename: str):
 
 const = _load("const", "const.py")
 policy = _load("policy", "policy.py")
+migration = _load("migration", "migration.py")
 
 sys.modules["lp_const"] = const
 sys.modules["lp_policy"] = policy
+sys.modules["lp_migration"] = migration
