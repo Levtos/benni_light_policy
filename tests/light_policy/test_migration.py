@@ -3,7 +3,7 @@ import lp_migration as M
 
 
 def test_config_entry_version_triggers_fleet54_migration() -> None:
-    assert C.CONFIG_ENTRY_VERSION == 2
+    assert C.CONFIG_ENTRY_VERSION == 3
 
 
 def test_migrate_legacy_entity_ids_updates_data_and_options() -> None:
@@ -19,7 +19,7 @@ def test_migrate_legacy_entity_ids_updates_data_and_options() -> None:
     new_data, new_options, changed = M.migrate_legacy_entity_ids(data, options)
 
     assert changed is True
-    assert new_data[C.CONF_CALENDAR_THEME] == "sensor.benni_core_state_day_context"
+    assert new_data[C.CONF_CALENDAR_THEME] == "sensor.benni_combined_context_day_context"
     assert (
         new_data[C.CONF_ENTERTAINMENT_STABLE]
         == "binary_sensor.benni_media_state_entertainment_active"
@@ -31,7 +31,7 @@ def test_migrate_legacy_entity_ids_updates_data_and_options() -> None:
 
 
 def test_migrate_legacy_entity_ids_noops_when_clean() -> None:
-    data = {C.CONF_CALENDAR_THEME: "sensor.benni_core_state_day_context"}
+    data = {C.CONF_CALENDAR_THEME: "sensor.benni_combined_context_day_context"}
     options = {
         C.CONF_LUX: "sensor.benni_device_garden_lux",
         C.CONF_SEASON: "sensor.benni_device_weather_season_meteorological",
@@ -42,3 +42,14 @@ def test_migrate_legacy_entity_ids_noops_when_clean() -> None:
     assert changed is False
     assert new_data == data
     assert new_options == options
+
+
+def test_migrate_fleet54_intermediate_core_state_day_context() -> None:
+    data = {C.CONF_CALENDAR_THEME: "sensor.benni_core_state_day_context"}
+    options: dict[str, str] = {}
+
+    new_data, new_options, changed = M.migrate_legacy_entity_ids(data, options)
+
+    assert changed is True
+    assert new_data[C.CONF_CALENDAR_THEME] == "sensor.benni_combined_context_day_context"
+    assert new_options == {}

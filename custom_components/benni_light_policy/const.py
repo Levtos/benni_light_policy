@@ -16,7 +16,7 @@ from typing import Final
 
 DOMAIN: Final[str] = "benni_light_policy"
 MODULE_ID: Final[str] = "light_policy"
-CONFIG_ENTRY_VERSION: Final[int] = 2
+CONFIG_ENTRY_VERSION: Final[int] = 3
 
 # Datenwurzel in hass.data[DOMAIN].
 DATA_COORDINATOR: Final[str] = "coordinator"
@@ -195,20 +195,20 @@ TV_MEDIA_CONTEXTS: Final = frozenset({"tv", "streaming"})
 # falls media_context (noch) nicht verdrahtet ist.
 MEDIA_DEVICE_TV: Final = "tv"
 
-# Toolbox-Auto-Prefill: Hub-Foundation-Felder werden mit den bekannten
-# Singleton-Entity-IDs der Benni-Toolbox vorbelegt (falls vorhanden) — der User
-# bestätigt nur, statt zu suchen. Geräte-spezifische Felder (Lux/Wetter/…) bleiben leer.
+# Foundation-Auto-Prefill: Hub-Felder werden mit den bekannten Core-Devices /
+# Custom-Integration-Entity-IDs vorbelegt (falls vorhanden) — der User bestätigt
+# nur, statt zu suchen. Geräte-spezifische Felder (Lux/Wetter/…) bleiben leer.
 # Einzelwert-Entities. Werden nur vorbelegt, WENN die Entity in HA existiert →
 # auf anderen Anlagen schadlos (greift einfach nicht). IDs aus der Live-Anlage
 # (einhornzentrale) ermittelt: eindeutige Singletons brauchen kein Raussuchen.
 ENTITY_PREFILL: Final[dict[str, str]] = {
-    CONF_BIO_STATE: "sensor.benni_context_bio_state",
-    CONF_ACTIVITY_STATE: "sensor.benni_context_activity_state",
-    CONF_DAY_STATE: "sensor.benni_core_day_state",
-    CONF_PRESENCE_PERSONAL: "sensor.benni_context_presence_personal",
-    CONF_PRESENCE_HOUSEHOLD: "sensor.benni_context_presence_household",
-    CONF_PRESENCE_TRANSITION: "sensor.benni_context_presence_transition",
-    CONF_CALENDAR_THEME: "sensor.benni_core_state_day_context",
+    CONF_BIO_STATE: "sensor.benni_combined_context_bio_state",
+    CONF_ACTIVITY_STATE: "sensor.benni_combined_context_activity_state",
+    CONF_DAY_STATE: "sensor.benni_combined_context_day_state",
+    CONF_PRESENCE_PERSONAL: "sensor.benni_combined_context_presence_personal",
+    CONF_PRESENCE_HOUSEHOLD: "sensor.benni_combined_context_presence_household",
+    CONF_PRESENCE_TRANSITION: "sensor.benni_combined_context_presence_transition",
+    CONF_CALENDAR_THEME: "sensor.benni_combined_context_day_context",
     CONF_LUX: "sensor.benni_device_garden_lux",
     # FLEET-36 Cut-over: Media-Truth kommt jetzt aus benni_media_state (L1-Feeder,
     # B2-Gate-Fix) statt aus dem alten Toolbox-Monolith benni_media_context.
