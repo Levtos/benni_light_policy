@@ -16,7 +16,7 @@ from typing import Final
 
 DOMAIN: Final[str] = "benni_light_policy"
 MODULE_ID: Final[str] = "light_policy"
-CONFIG_ENTRY_VERSION: Final[int] = 3
+CONFIG_ENTRY_VERSION: Final[int] = 4
 
 # Datenwurzel in hass.data[DOMAIN].
 DATA_COORDINATOR: Final[str] = "coordinator"
@@ -236,6 +236,9 @@ GROUP_PREFILL: Final[dict[str, list[str]]] = {
         "light.living_sofa_wall_strip",
         "light.living_desk_strip_stripe",
         "light.living_ceiling_light_white",
+        # RGB-Ring des Deckenlichts: eigene light-Entity, MUSS im Hard-Off-Scope sein
+        # (Aqara-Restart-Bug schaltet ihn sonst nach Neustart/idle dauerhaft an).
+        "light.living_ceiling_light_rgb",
     ],
 }
 

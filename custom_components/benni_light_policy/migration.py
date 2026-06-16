@@ -6,9 +6,14 @@ from typing import Any
 from .const import (
     CONF_CALENDAR_THEME,
     CONF_ENTERTAINMENT_STABLE,
+    CONF_GROUP_ALL,
     CONF_LUX,
     CONF_SEASON,
 )
+
+# WZ-Deckenlicht = zwei light-Entities (weißes Panel + Aqara-RGB-Ring).
+CEILING_WHITE: str = "light.living_ceiling_light_white"
+CEILING_RGB: str = "light.living_ceiling_light_rgb"
 
 LEGACY_ENTITY_REPLACEMENTS: dict[str, str] = {
     "sensor.benni_context_day_context": "sensor.benni_combined_context_day_context",
@@ -48,3 +53,27 @@ def migrate_legacy_entity_ids(
                 migrated = True
 
     return new_data, new_options, migrated
+
+
+def ensure_ceiling_rgb_in_group_all(
+    data: dict[str, Any],
+    options: dict[str, Any],
+) -> bool:
+    """Hard-Off-Scope um den RGB-Ring des WZ-Deckenlichts ergänzen.
+
+    Der Aqara-Restart-Bug schaltet `light.living_ceiling_light_rgb` beim HA-Start
+    ein. Der Ring ist eine eigene light-Entity und fehlte in GROUP_ALL → der
+    idle-Hard-Off (auch der erzwungene Re-Apply nach Neustart) räumte ihn nicht ab,
+    er blieb dauerhaft an. Ergänzt ihn idempotent, sofern das weiße Panel bereits
+    in GROUP_ALL steht (= diese Installation). Mutiert das effektive Dict in place.
+    """
+    owner = options if isinstance(options.get(CONF_GROUP_ALL), list) else data
+    groups = owner.get(CONF_GROUP_ALL)
+    if (
+        isinstance(groups, list)
+        and CEILING_WHITE in groups
+        and CEILING_RGB not in groups
+    ):
+        owner[CONF_GROUP_ALL] = [*groups, CEILING_RGB]
+        return True
+    return False

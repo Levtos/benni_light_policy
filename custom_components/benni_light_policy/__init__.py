@@ -21,7 +21,7 @@ from .const import (
     SERVICE_SET_MANUAL_OFF,
 )
 from .coordinator import LightPolicyCoordinator
-from .migration import migrate_legacy_entity_ids
+from .migration import ensure_ceiling_rgb_in_group_all, migrate_legacy_entity_ids
 from .view import async_remove_view, async_setup_view
 from .websocket_api import async_setup_websocket_api
 
@@ -37,6 +37,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         dict(entry.data),
         dict(entry.options),
     )
+    if ensure_ceiling_rgb_in_group_all(data, options):
+        changed = True
     if changed:
         hass.config_entries.async_update_entry(
             entry, data=data, options=options, version=CONFIG_ENTRY_VERSION
