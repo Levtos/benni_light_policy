@@ -218,6 +218,27 @@ def hallway_should_light(trigger_active: bool, lux_gate_on: bool) -> bool:
     return bool(trigger_active and lux_gate_on)
 
 
+def stranded_entities(prev: Iterable[str], keep: Iterable[str]) -> list[str]:
+    """Cross-Area-Teardown (FLEET-74): Entities, die der vorige Apply konkret
+    eingeschaltet hat (`prev`), aber der neue Apply nicht mehr besitzt (`keep`).
+
+    Gibt `prev` MINUS `keep` zurück (reihenfolgestabil, dedupliziert). Substrat für
+    den Diff-Teardown: light_policy schaltet rohe Cross-Area-Lampen (Wecklicht in
+    Schlafzimmer/Küche via `raw_targets`) direkt ein und ist ihr einziger Owner —
+    scene_presets-Looks räumen nur ihre eigene Area über Off-Bindings ab. Ohne
+    diesen Diff blieben gestrandete Lampen beim State-Wechsel (waking→awake) an.
+    """
+    keep_set = set(keep)
+    seen: set[str] = set()
+    out: list[str] = []
+    for eid in prev:
+        if eid in keep_set or eid in seen:
+            continue
+        seen.add(eid)
+        out.append(eid)
+    return out
+
+
 def weather_darkness(
     lux_now: float | None,
     lux_baseline: float | None,
