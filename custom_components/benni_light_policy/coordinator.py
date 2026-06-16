@@ -155,6 +155,10 @@ class LightPolicyCoordinator:
         # Erkennung → kurzer Fade statt Look-Default-Crossfade.
         self._last_applied_look_ref: str | None = None
         self._last_applied_brightness: int | None = None
+        # FLEET-74: konkret kommandierte Cross-Area-Entities (rohe raw_targets, die
+        # light_policy selbst per light.turn_on schaltet und allein besitzt). Persistiert,
+        # damit der nächste Apply gestrandete Lampen (Wecklicht) abräumen kann.
+        self._last_commanded_entities: list[str] = []
         self._last_apply_ts = 0.0
         self._apply_task: asyncio.Task | None = None
 
@@ -357,6 +361,10 @@ class LightPolicyCoordinator:
         self._prev_day_state = raw.get("prev_day_state")
         self._last_applied_look_ref = raw.get("last_applied_look_ref")
         self._last_applied_brightness = raw.get("last_applied_brightness")
+        commanded = raw.get("last_commanded_entities")
+        self._last_commanded_entities = (
+            [e for e in commanded if isinstance(e, str)] if isinstance(commanded, list) else []
+        )
 
     async def _async_save(self) -> None:
         await self._store.async_save({
@@ -367,6 +375,7 @@ class LightPolicyCoordinator:
             "prev_day_state": self._prev_day_state,
             "last_applied_look_ref": self._last_applied_look_ref,
             "last_applied_brightness": self._last_applied_brightness,
+            "last_commanded_entities": list(self._last_commanded_entities),
             "last_plan": self._last_plan.as_dict() if self._last_plan else None,
         })
 
@@ -609,10 +618,15 @@ class LightPolicyCoordinator:
                     keep_look_ref=None,
                     previous_look_ref=previous_look_ref,
                 )
-                await self._turn_off(
+                off_targets = (
                     self._resolve_targets([GROUP_ALL])
                     or self._resolve_targets(plan.exclusive_off)
                 )
+                # FLEET-74: Hard-Off räumt zusätzlich gestrandete Cross-Area-Lampen
+                # (z.B. Wecklicht-Schlafzimmer/Küche) mit ab — sonst nur GROUP_ALL (WZ).
+                stranded = policy.stranded_entities(self._last_commanded_entities, off_targets)
+                await self._turn_off([*off_targets, *stranded])
+                self._last_commanded_entities = []
                 return
 
             # wake_up-Sonderfall: freie raw_targets, kein Look → direkter CCT-turn_on.
@@ -625,6 +639,12 @@ class LightPolicyCoordinator:
                     keep_look_ref=None,
                     previous_look_ref=previous_look_ref,
                 )
+                # FLEET-74: gestrandete Lampen aus dem vorigen Raw-Apply (die diesmal
+                # nicht mehr Ziel sind) zuerst abschalten, dann die neuen einschalten.
+                stranded = policy.stranded_entities(
+                    self._last_commanded_entities, plan.raw_targets
+                )
+                await self._turn_off(stranded)
                 await self.hass.services.async_call(
                     "light", "turn_on",
                     {
@@ -635,6 +655,7 @@ class LightPolicyCoordinator:
                     },
                     blocking=False,
                 )
+                self._last_commanded_entities = list(plan.raw_targets)
                 return
 
             # Alle übrigen Modi (CCT-Kelvin-Look + Szene): EIN apply_look. Der Look trägt
@@ -660,9 +681,16 @@ class LightPolicyCoordinator:
                 keep_look_ref=look_ref,
                 previous_look_ref=previous_look_ref,
             )
+            # FLEET-74: rohe Cross-Area-Lampen aus einem vorigen Raw-Apply (Wecklicht)
+            # abräumen — der Look räumt nur seine eigene Area via Off-Bindings ab. Die vom
+            # neuen Look abgedeckten Gruppen (plan.targets) bleiben verschont (kein Flicker).
+            owned = self._resolve_targets(plan.targets)
+            stranded = policy.stranded_entities(self._last_commanded_entities, owned)
+            await self._turn_off(stranded)
             await self.hass.services.async_call(
                 SCENE_PRESETS_DOMAIN, SP_SERVICE_APPLY_LOOK, data, blocking=False,
             )
+            self._last_commanded_entities = []
         except asyncio.CancelledError:
             raise
         except Exception as err:  # noqa: BLE001 - ein fehlgeschlagener Apply darf den Loop nicht killen

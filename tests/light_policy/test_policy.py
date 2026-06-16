@@ -371,3 +371,38 @@ def test_dayphase_policy_is_terminal():
     last = P.LIVING_ROOM_POLICIES[-1]
     assert last.kind == "dayphase"
     assert last.evaluate(_ctx(day_state="late_night"), True, dict(C.DEFAULT_BRIGHTNESS)) is not None
+
+
+# ------------------------------------------------ FLEET-74 Cross-Area-Teardown
+def test_stranded_wake_up_to_dayphase_turns_off_cross_area():
+    # waking→awake: Wecklicht-Lampen (Schlafzimmer/Küche) waren roh an, neuer
+    # Wohnzimmer-Look besitzt sie nicht → sie stranden und müssen aus.
+    prev = ["light.bedroom_ceiling", "light.kitchen_strip"]
+    owned = ["light.living_main"]  # resolved plan.targets des Wohnzimmer-Looks
+    assert P.stranded_entities(prev, owned) == [
+        "light.bedroom_ceiling", "light.kitchen_strip",
+    ]
+
+
+def test_stranded_wake_up_to_wake_up_keeps_shared_lamp():
+    # Geteilte Lampe bleibt an, nur die entfallene strandet.
+    prev = ["light.bedroom_ceiling", "light.kitchen_strip"]
+    keep = ["light.bedroom_ceiling"]
+    assert P.stranded_entities(prev, keep) == ["light.kitchen_strip"]
+
+
+def test_stranded_empty_when_nothing_commanded():
+    # dayphase→dayphase: voriger Apply hatte keine rohen Targets → kein Diff.
+    assert P.stranded_entities([], ["light.living_main"]) == []
+
+
+def test_stranded_hard_off_drops_everything_not_in_group_all():
+    # →Hard-Off: owned = GROUP_ALL (Wohnzimmer), Cross-Area-Rest strandet.
+    prev = ["light.living_main", "light.bedroom_ceiling"]
+    group_all = ["light.living_main", "light.living_ceiling"]
+    assert P.stranded_entities(prev, group_all) == ["light.bedroom_ceiling"]
+
+
+def test_stranded_dedupes_and_preserves_order():
+    prev = ["light.b", "light.a", "light.b", "light.c"]
+    assert P.stranded_entities(prev, ["light.c"]) == ["light.b", "light.a"]
