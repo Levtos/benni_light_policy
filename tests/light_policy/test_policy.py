@@ -115,6 +115,17 @@ def test_lux_gate_off_hard_off():
     assert p.apply_kind == P.APPLY_OFF
 
 
+def test_hard_off_carries_idle_look_key():
+    # FLEET-142: Off-Zustand trägt preset_enum=idle, damit er über die Look-Map
+    # auf den all_off-Look auflösbar ist (Warden-Vokabular). Apply selbst bleibt
+    # fail-safe direktes turn_off — der Key ändert das nicht.
+    sleep = _decide(_ctx(bio_state=C.BIO_SLEEP))
+    lux = _decide(_ctx(bio_state=C.BIO_AWAKE, activity_state=C.ACTIVITY_PRIVATE_TIME), lux_gate_on=False)
+    assert sleep.preset_enum == C.MODE_IDLE
+    assert lux.preset_enum == C.MODE_IDLE
+    assert C.MODE_IDLE in C.POLICY_FIXED_MODES
+
+
 def test_private_time():
     p = _decide(_ctx(activity_state=C.ACTIVITY_PRIVATE_TIME, day_state="late_evening"))
     assert p.mode == C.MODE_PRIVATE_TIME

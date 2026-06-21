@@ -314,7 +314,7 @@ def _eval_sleep_off(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan |
     if ctx.bio_state != BIO_SLEEP:
         return None
     return Plan(
-        mode=MODE_IDLE, preset_enum=None, brightness=0, color_temp=None,
+        mode=MODE_IDLE, preset_enum=MODE_IDLE, brightness=0, color_temp=None,
         apply_kind=APPLY_OFF, targets=[], exclusive_off=[GROUP_ALL],
         lux_gate_on=gate, reason="hard_off: bio=sleep",
     )
@@ -324,7 +324,7 @@ def _eval_lux_off(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | N
     if gate:
         return None
     return Plan(
-        mode=MODE_IDLE, preset_enum=None, brightness=0, color_temp=None,
+        mode=MODE_IDLE, preset_enum=MODE_IDLE, brightness=0, color_temp=None,
         apply_kind=APPLY_OFF, targets=[], exclusive_off=[GROUP_ALL],
         lux_gate_on=gate, reason="hard_off: lux_gate off (zu hell)",
     )

@@ -105,7 +105,10 @@ SEASONS: Final = (SEASON_SPRING, SEASON_SUMMER, SEASON_AUTUMN, SEASON_WINTER)
 POLICY_EVENT_THEMES: Final = ("christmas", "easter", "halloween", "carnival")
 POLICY_THEMES: Final = (*SEASONS, *POLICY_EVENT_THEMES)
 # Feste Policy-Modi, die einen Look-Ref brauchen (keine Tagesphasen-Matrix).
-POLICY_FIXED_MODES: Final = ("cinema", "private_time", "waking", "work_home")
+# `idle` = Hard-Off-Zustand: bekommt eine eigene Look-Map-Zuordnung (all_off-Look),
+# damit der Warden den Off-Zustand über die Look-Ebene durchsetzen kann. Der Apply
+# selbst bleibt fail-safe direktes light.turn_off auf GROUP_ALL (APPLY_OFF-Zweig).
+POLICY_FIXED_MODES: Final = ("idle", "cinema", "private_time", "waking", "work_home")
 
 CALENDAR_BIRTHDAY: Final = "geburtstag"
 
