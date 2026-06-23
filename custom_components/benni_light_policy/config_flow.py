@@ -59,7 +59,9 @@ from .const import (
     CONF_SOURCE_ID,
     CONF_SOURCE_PRIORITY,
     CONF_TRIGGER_VALUE,
+    CONF_WAKE_TEARDOWN_AREAS,
     CONF_WAKE_UP_TARGETS,
+    AREA_PREFILL,
     MAPPING_PRESET_PREFIX,
     MAPPING_SLOT_COUNT,
     MAPPING_VALUE_PREFIX,
@@ -85,6 +87,7 @@ _ENTITY = selector.EntitySelector(selector.EntitySelectorConfig())
 _ENTITIES = selector.EntitySelector(selector.EntitySelectorConfig(multiple=True))
 _LIGHT = selector.EntitySelector(selector.EntitySelectorConfig(domain="light"))
 _LIGHTS = selector.EntitySelector(selector.EntitySelectorConfig(domain="light", multiple=True))
+_AREAS = selector.AreaSelector(selector.AreaSelectorConfig(multiple=True))
 # Bad-Licht ist nicht immer ein light.* — z.B. Shelly Switch.
 _LIGHT_OR_SWITCH = selector.EntitySelector(
     selector.EntitySelectorConfig(domain=["light", "switch"])
@@ -103,6 +106,7 @@ SELECTORS: dict[str, Any] = {
     CONF_GUEST: _ENTITY, CONF_PRESENCE_TRANSITION: _ENTITY,
     CONF_OVERNIGHT_AWAY: _ENTITY, CONF_SYSTEM_READY: _ENTITY,
     CONF_GROUP_MAIN: _LIGHTS, CONF_GROUP_CEILING: _LIGHTS, CONF_GROUP_ALL: _LIGHTS,
+    CONF_WAKE_TEARDOWN_AREAS: _AREAS,
     CONF_APPLY_ENABLED: _BOOL, CONF_STARTUP_BLOCK_SECONDS: _INT,
     CONF_CROSSFADE_SECONDS: _INT,
     # Subentry-Felder (Minihub-Schema)
@@ -129,7 +133,7 @@ STEP_ENVIRONMENT = (CONF_LUX, CONF_WEATHER, CONF_SEASON,
                     CONF_CALENDAR_THEME, CONF_ENTERTAINMENT_STABLE,
                     CONF_MEDIA_DEVICE, CONF_MEDIA_CONTEXT)
 STEP_SIGNALS = (CONF_GUEST, CONF_PRESENCE_TRANSITION, CONF_OVERNIGHT_AWAY, CONF_SYSTEM_READY)
-STEP_LAMPS = (CONF_GROUP_MAIN, CONF_GROUP_CEILING, CONF_GROUP_ALL)
+STEP_LAMPS = (CONF_GROUP_MAIN, CONF_GROUP_CEILING, CONF_GROUP_ALL, CONF_WAKE_TEARDOWN_AREAS)
 STEP_OPTIONS = (CONF_APPLY_ENABLED, CONF_STARTUP_BLOCK_SECONDS, CONF_CROSSFADE_SECONDS)
 
 HUB_MENU = ("context", "environment", "signals", "lamps", "options")
@@ -196,6 +200,12 @@ def _prefilled(keys: tuple[str, ...], data: dict[str, Any], hass) -> dict[str, A
             present = [e for e in group if _exists(hass, e)]
             if present:
                 defaults[key] = present
+            continue
+        # Area-Prefill (Wake-Teardown) — Areas sind keine Entities; ohne
+        # Existenz-Check, greift schadlos (fehlende Area → leere Auflösung).
+        areas = AREA_PREFILL.get(key)
+        if areas:
+            defaults[key] = list(areas)
     return defaults
 
 

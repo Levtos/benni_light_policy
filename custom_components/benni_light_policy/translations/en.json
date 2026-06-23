@@ -38,7 +38,8 @@
         "data": {
           "group_main": "Hauptgruppe",
           "group_ceiling": "Deckenlampe (CCT)",
-          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)"
+          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)",
+          "wake_teardown_areas": "Wake-Teardown-Bereiche (Schlafzimmer/Küche, beim Verlassen des Weck-/Work-Home-Zustands aus)"
         }
       },
       "options": {
@@ -103,7 +104,8 @@
         "data": {
           "group_main": "Hauptgruppe",
           "group_ceiling": "Deckenlampe (CCT)",
-          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)"
+          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)",
+          "wake_teardown_areas": "Wake-Teardown-Bereiche (Schlafzimmer/Küche, beim Verlassen des Weck-/Work-Home-Zustands aus)"
         }
       },
       "options": {

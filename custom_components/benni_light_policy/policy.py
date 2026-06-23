@@ -218,6 +218,23 @@ def hallway_should_light(trigger_active: bool, lux_gate_on: bool) -> bool:
     return bool(trigger_active and lux_gate_on)
 
 
+# Modi, die den Wecklicht-Look fahren (raumübergreifend, inkl. Schlafzimmer).
+# work_home + waking mappen beide auf Wecklicht (User-Vorgabe FLEET-151).
+WAKE_MODES: frozenset[str] = frozenset({MODE_WAKING, MODE_WORK_HOME})
+
+
+def wake_exit(prev_mode: str | None, new_mode: str | None) -> bool:
+    """FLEET-151: True beim Übergang RAUS aus einem Wake-Zustand in einen
+    Nicht-Wake-Zustand. Quellenagnostisch — hängt am Policy-STATE (Modus verlässt
+    Wake), nicht am Look. Auslöser für den Wake-only-Bereichs-Teardown.
+
+    - prev ∉ WAKE_MODES → False (wir waren nicht im Wake).
+    - prev ∈ WAKE_MODES und new ∈ WAKE_MODES → False (waking↔work_home, kein Flicker).
+    - prev ∈ WAKE_MODES und new ∉ WAKE_MODES → True (z.B. waking→awake/idle).
+    """
+    return prev_mode in WAKE_MODES and new_mode not in WAKE_MODES
+
+
 def stranded_entities(prev: Iterable[str], keep: Iterable[str]) -> list[str]:
     """Cross-Area-Teardown (FLEET-74): Entities, die der vorige Apply konkret
     eingeschaltet hat (`prev`), aber der neue Apply nicht mehr besitzt (`keep`).

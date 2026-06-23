@@ -93,6 +93,36 @@ def test_hallway_should_light():
     assert P.hallway_should_light(False, True) is False   # kein Trigger
 
 
+# ---------------------------------------------------------------- wake-exit teardown (FLEET-151)
+def test_wake_exit_fires_waking_to_awake():
+    # Kern-Fall: waking→awake (Tagesphasen-Fallback) → Teardown der Wake-Areas.
+    assert P.wake_exit(C.MODE_WAKING, "early_morning") is True
+
+
+def test_wake_exit_fires_from_work_home():
+    # work_home mappt ebenfalls auf Wecklicht → Exit räumt auch hier ab.
+    assert P.wake_exit(C.MODE_WORK_HOME, C.MODE_IDLE) is True
+
+
+def test_wake_exit_no_fire_within_wake():
+    # waking↔work_home bleiben Wake → kein Teardown (kein Flicker, Lampen bleiben).
+    assert P.wake_exit(C.MODE_WAKING, C.MODE_WORK_HOME) is False
+    assert P.wake_exit(C.MODE_WAKING, C.MODE_WAKING) is False
+
+
+def test_wake_exit_no_fire_when_not_in_wake():
+    # Kein vorheriger Wake-Zustand → nie Teardown (auch nach Restart: prev=None).
+    assert P.wake_exit(None, "afternoon") is False
+    assert P.wake_exit("cinema", C.MODE_IDLE) is False
+    assert P.wake_exit("afternoon", C.MODE_WAKING) is False  # Eintritt ≠ Austritt
+
+
+def test_wake_modes_membership():
+    assert C.MODE_WAKING in P.WAKE_MODES
+    assert C.MODE_WORK_HOME in P.WAKE_MODES
+    assert C.MODE_IDLE not in P.WAKE_MODES
+
+
 # ---------------------------------------------------------------- decision chain
 def test_waking_overrides_everything():
     p = _decide(_ctx(bio_state=C.BIO_WAKING, day_state="late_night"), lux_gate_on=False)
