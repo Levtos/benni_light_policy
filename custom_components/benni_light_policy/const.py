@@ -105,7 +105,10 @@ SEASONS: Final = (SEASON_SPRING, SEASON_SUMMER, SEASON_AUTUMN, SEASON_WINTER)
 POLICY_EVENT_THEMES: Final = ("christmas", "easter", "halloween", "carnival")
 POLICY_THEMES: Final = (*SEASONS, *POLICY_EVENT_THEMES)
 # Feste Policy-Modi, die einen Look-Ref brauchen (keine Tagesphasen-Matrix).
-POLICY_FIXED_MODES: Final = ("cinema", "private_time", "waking", "work_home")
+# `idle` = Hard-Off-Zustand: bekommt eine eigene Look-Map-Zuordnung (all_off-Look),
+# damit der Warden den Off-Zustand über die Look-Ebene durchsetzen kann. Der Apply
+# selbst bleibt fail-safe direktes light.turn_off auf GROUP_ALL (APPLY_OFF-Zweig).
+POLICY_FIXED_MODES: Final = ("idle", "cinema", "private_time", "waking", "work_home")
 
 CALENDAR_BIRTHDAY: Final = "geburtstag"
 
@@ -137,6 +140,13 @@ CONF_PRESET_CATALOG: Final = "preset_catalog_entity"   # (deprecated, UX-Rework)
 CONF_GROUP_MAIN: Final = "group_main"                  # Hauptgruppe (light/group entity_id)
 CONF_GROUP_CEILING: Final = "group_ceiling"            # Deckenlampe CCT
 CONF_GROUP_ALL: Final = "group_all"                    # Hard-Off-Ziel
+# Wake-only-Bereichs-Teardown (FLEET-151): Nicht-Wohnzimmer-Areas, die der
+# Wecklicht-Look anschaltet (Schlafzimmer-Strips; Küche nur falls real im Look).
+# Liste von AREA-IDs — die konkreten Lampen werden zur Laufzeit aus der
+# Area-Zugehörigkeit aufgelöst (neue Lampe im Bereich = automatisch drin). Beim
+# Verlassen eines Wake-Zustands (waking/work_home → Nicht-Wake) werden diese per
+# direktem light.turn_off abgeräumt (formgleich zum GROUP_ALL-Hard-Off, kein Look).
+CONF_WAKE_TEARDOWN_AREAS: Final = "wake_teardown_areas"
 
 # Bereichs-Entities (R14–R17).
 CONF_HALLWAY_LIGHT: Final = "hallway_light"
@@ -245,6 +255,14 @@ GROUP_PREFILL: Final[dict[str, list[str]]] = {
 # Subentry-Felder, die sich eindeutig vorbelegen lassen (aktuell keine —
 # Wake-Up-Subentry braucht Light-Liste, die ist installations-spezifisch).
 SUBENTRY_PREFILL: Final[dict[str, str]] = {}
+
+# Wake-only-Teardown-Areas — Default + Config-Flow-Prefill. Verifiziert gegen den
+# Live-Wecklicht-Look (FLEET-151): nur Schlafzimmer ist aktuell im Look (Küche
+# bleibt aus). Greift schadlos auf anderen Anlagen (Area fehlt → leere Auflösung).
+DEFAULT_WAKE_TEARDOWN_AREAS: Final[tuple[str, ...]] = ("schlafzimmer",)
+AREA_PREFILL: Final[dict[str, list[str]]] = {
+    CONF_WAKE_TEARDOWN_AREAS: list(DEFAULT_WAKE_TEARDOWN_AREAS),
+}
 
 # Options.
 CONF_APPLY_ENABLED: Final = "apply_enabled"

@@ -22,6 +22,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
@@ -70,9 +71,11 @@ from .const import (
     CONF_SOURCE_ID,
     CONF_SOURCE_PRIORITY,
     CONF_TRIGGER_VALUE,
+    CONF_WAKE_TEARDOWN_AREAS,
     CONF_WAKE_UP_TARGETS,
     CONF_WEATHER,
     DATA_SKIP_RELOAD_COUNT,
+    DEFAULT_WAKE_TEARDOWN_AREAS,
     GAMING_DEFAULT_PRIORITY,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_BRIGHTNESS,
@@ -150,6 +153,11 @@ class LightPolicyCoordinator:
         self._lux_history: list[tuple[float, float]] = []  # (monotonic_ts, lux)
 
         self._last_plan: policy.Plan | None = None
+        # FLEET-151: zuletzt entschiedener Modus — Substrat für die Wake-Exit-
+        # Erkennung. Bewusst NICHT persistiert (restart-trivial): nach Neustart
+        # beobachtet die Policy den nächsten Übergang live und räumt dann ab.
+        self._prev_mode: str | None = None
+        self._last_wake_teardown: list[str] = []  # nur für Debug/Observability
         self._last_applied_hash: str | None = None  # hash actually pushed to lights
         # Überlebt den Reload (persistiert): erlaubt „selber Look, andere Brightness"-
         # Erkennung → kurzer Fade statt Look-Default-Crossfade.
@@ -515,6 +523,15 @@ class LightPolicyCoordinator:
                 previous_look_ref=previous_look_ref,
             )
 
+        # FLEET-151: Wake-only-Bereichs-Teardown. Beim Verlassen eines Wake-Zustands
+        # (waking/work_home → Nicht-Wake) räumt die Policy raumübergreifend die
+        # Nicht-Wohnzimmer-Wake-Lampen (Schlafzimmer-Strips, ggf. Küche) per direktem
+        # light.turn_off ab — der eingehende Wohnzimmer-Look kann sie nicht erreichen.
+        # Quellenagnostisch (am STATE-Exit, nicht am Look) und gated wie der Apply.
+        if self.apply_enabled and policy.wake_exit(self._prev_mode, plan.mode):
+            await self._wake_area_teardown()
+        self._prev_mode = plan.mode
+
         await self._async_save()
         for cb in self._listeners:
             cb()
@@ -741,6 +758,46 @@ class LightPolicyCoordinator:
             "light", "turn_off", {"entity_id": targets}, blocking=False,
         )
 
+    # ----- FLEET-151: Wake-only-Bereichs-Teardown -----
+    def wake_teardown_targets(self) -> list[str]:
+        """Light-Entities der konfigurierten Wake-Teardown-Areas (Default:
+        Schlafzimmer), zur Laufzeit aus der Area-Zugehörigkeit aufgelöst — eine
+        neue Lampe im Bereich ist automatisch dabei (keine Handliste). Area kommt
+        aus Entity- ODER Geräte-Registry. Wohnzimmer-Lampen (GROUP_ALL) werden zur
+        Sicherheit ausgeschlossen, damit der Teardown den WZ-Look nie anfasst."""
+        raw = self._opt(CONF_WAKE_TEARDOWN_AREAS)
+        if raw is None:
+            raw = list(DEFAULT_WAKE_TEARDOWN_AREAS)
+        if isinstance(raw, str):
+            raw = [raw]
+        area_set = {a for a in raw if isinstance(a, str) and a}
+        if not area_set:
+            return []
+        ent_reg = er.async_get(self.hass)
+        dev_reg = dr.async_get(self.hass)
+        living = set(self._resolve_targets([GROUP_ALL]))
+        out: list[str] = []
+        seen: set[str] = set()
+        for ent in ent_reg.entities.values():
+            if not ent.entity_id.startswith("light."):
+                continue
+            area_id = ent.area_id
+            if area_id is None and ent.device_id:
+                dev = dev_reg.async_get(ent.device_id)
+                area_id = dev.area_id if dev else None
+            if area_id in area_set and ent.entity_id not in living and ent.entity_id not in seen:
+                seen.add(ent.entity_id)
+                out.append(ent.entity_id)
+        return out
+
+    async def _wake_area_teardown(self) -> None:
+        targets = self.wake_teardown_targets()
+        self._last_wake_teardown = list(targets)
+        if not targets:
+            return
+        _LOGGER.info("light_policy: wake-exit teardown → %s", targets)
+        await self._turn_off(targets)
+
     # ----- service surface -----
     async def async_apply_now(self) -> policy.Plan:
         self._last_applied_hash = None  # erzwingt hash_changed → Re-Apply
@@ -878,6 +935,9 @@ class LightPolicyCoordinator:
             "lux_samples": len(self._lux_history),
             "apply_enabled": self.apply_enabled,
             "manual_off_active": self._manual_off,
+            "prev_mode": self._prev_mode,
+            "wake_teardown_targets": self.wake_teardown_targets(),
+            "last_wake_teardown": list(self._last_wake_teardown),
         }
 
     # ----- accessors -----
