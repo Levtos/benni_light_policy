@@ -47,7 +47,6 @@ from .const import (
     CONF_PRESENCE_HOUSEHOLD,
     CONF_PRESENCE_PERSONAL,
     CONF_PRESENCE_TRANSITION,
-    CONF_PRESET_ENUM,
     CONF_REQUIRE_BIRTHDAY,
     CONF_RING_TARGETS,
     CONF_SEASON,
@@ -58,7 +57,6 @@ from .const import (
     CONF_MEDIA_DEVICE,
     CONF_SOURCE_ID,
     CONF_SOURCE_PRIORITY,
-    CONF_TRIGGER_VALUE,
     CONF_WAKE_TEARDOWN_AREAS,
     CONF_WAKE_UP_TARGETS,
     AREA_PREFILL,
@@ -94,7 +92,9 @@ _LIGHT_OR_SWITCH = selector.EntitySelector(
 )
 _BOOL = selector.BooleanSelector()
 _TEXT = selector.TextSelector(selector.TextSelectorConfig())
-_INT = vol.Coerce(int)
+_SECONDS = vol.All(vol.Coerce(int), vol.Range(min=0, max=86400))
+_TIMEOUT_SECONDS = vol.All(vol.Coerce(int), vol.Range(min=1, max=86400))
+_PRIORITY = vol.All(vol.Coerce(int), vol.Range(min=0, max=1000))
 
 SELECTORS: dict[str, Any] = {
     # Hub-Foundation
@@ -107,15 +107,15 @@ SELECTORS: dict[str, Any] = {
     CONF_OVERNIGHT_AWAY: _ENTITY, CONF_SYSTEM_READY: _ENTITY,
     CONF_GROUP_MAIN: _LIGHTS, CONF_GROUP_CEILING: _LIGHTS, CONF_GROUP_ALL: _LIGHTS,
     CONF_WAKE_TEARDOWN_AREAS: _AREAS,
-    CONF_APPLY_ENABLED: _BOOL, CONF_STARTUP_BLOCK_SECONDS: _INT,
-    CONF_CROSSFADE_SECONDS: _INT,
+    CONF_APPLY_ENABLED: _BOOL, CONF_STARTUP_BLOCK_SECONDS: _SECONDS,
+    CONF_CROSSFADE_SECONDS: _SECONDS,
     # Subentry-Felder (Minihub-Schema)
     CONF_CLASSIFIER_ENTITY: _ENTITY,
-    CONF_SOURCE_ID: _TEXT, CONF_SOURCE_PRIORITY: _INT,
-    CONF_TRIGGER_VALUE: _TEXT, CONF_PRESET_ENUM: _TEXT,
+    CONF_SOURCE_ID: _TEXT, CONF_SOURCE_PRIORITY: _PRIORITY,
     CONF_REQUIRE_BIRTHDAY: _BOOL, CONF_RING_TARGETS: _LIGHTS,
     CONF_HALLWAY_LIGHT: _LIGHT, CONF_HALLWAY_TRIGGERS: _ENTITIES,
-    CONF_BATHROOM_LIGHT: _LIGHT_OR_SWITCH, CONF_BATHROOM_VIBRATION: _ENTITY, CONF_BATHROOM_TIMEOUT: _INT,
+    CONF_BATHROOM_LIGHT: _LIGHT_OR_SWITCH, CONF_BATHROOM_VIBRATION: _ENTITY,
+    CONF_BATHROOM_TIMEOUT: _TIMEOUT_SECONDS,
     CONF_WAKE_UP_TARGETS: _LIGHTS,
 }
 
@@ -162,9 +162,6 @@ SUBENTRY_DEFAULT_TITLE: dict[str, str] = {
     SUBENTRY_NOTIFICATION_RING: "Notification RGB", SUBENTRY_HALLWAY: "Flur",
     SUBENTRY_BATHROOM: "Bad", SUBENTRY_WAKE_UP: "Wake-Up",
 }
-SUBENTRY_PRESET_DEFAULT: dict[str, str] = {}
-
-
 def _marker(key: str, defaults: dict[str, Any]):
     if key in INT_DEFAULTS:
         return vol.Optional(key, default=defaults.get(key, INT_DEFAULTS[key]))
@@ -354,8 +351,6 @@ class _BasePolicySubentryFlow(ConfigSubentryFlow):
             return self.async_create_entry(title=title, data=user_input)
 
         defaults: dict[str, Any] = {}
-        if stype in SUBENTRY_PRESET_DEFAULT:
-            defaults[CONF_PRESET_ENUM] = SUBENTRY_PRESET_DEFAULT[stype]
         # Auto-Prefill eindeutiger Subentry-Felder (z.B. Awake-Dauer), wenn vorhanden.
         for key in SUBENTRY_FIELDS[stype]:
             cand = SUBENTRY_PREFILL.get(key)

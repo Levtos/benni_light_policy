@@ -35,13 +35,13 @@ from .const import (
     CONF_SYSTEM_READY,
     CONF_WEATHER,
     DATA_COORDINATOR,
-    DAY_PHASES,
     DOMAIN,
     POLICY_FIXED_MODES,
     POLICY_THEMES,
     SUBENTRY_GAMING,
     SUBENTRY_MUSIC,
     SUBENTRY_NOTIFICATION_RING,
+    SUPPORTED_DAY_PHASES,
     WS_GET_LOOK_MAP,
     WS_GET_STATUS,
     WS_SET_APPLY_ENABLED,
@@ -79,7 +79,11 @@ def _coordinator(hass: HomeAssistant):
 
 def matrix_keys(themes: list[str] | tuple[str, ...] | None = None) -> list[str]:
     """Alle Tagesphasen-Matrix-Keys (theme_phase)."""
-    return [f"{theme}_{phase}" for theme in (themes or POLICY_THEMES) for phase in DAY_PHASES]
+    return [
+        f"{theme}_{phase}"
+        for theme in (themes or POLICY_THEMES)
+        for phase in SUPPORTED_DAY_PHASES
+    ]
 
 
 def _entity_ready(hass: HomeAssistant, eid: str | None) -> bool:
@@ -150,7 +154,6 @@ def _status(hass: HomeAssistant, coord) -> dict[str, Any]:
         "apply_enabled": coord.apply_enabled,
         "manual_off": coord.manual_off_active,
         "ring_mode": coord.ring_mode,
-        "bedtime_active": getattr(coord, "bedtime_signal_active", False),
         "activity": coord.current_activity(),
         "day_state": coord.current_day_state(),
         # gewünschter Policy-Key + aufgelöster echter Look-Ref (für Coverage/Anzeige).
@@ -173,7 +176,7 @@ def _catalog(coord) -> dict[str, Any]:
         "fixed_modes": list(POLICY_FIXED_MODES),
         "themes": themes,
         "custom_themes": list(coord.custom_themes),
-        "phases": list(DAY_PHASES),
+        "phases": list(SUPPORTED_DAY_PHASES),
         "matrix_keys": matrix_keys(themes),
         "subentry_rules": _subentry_rules(coord),
     }

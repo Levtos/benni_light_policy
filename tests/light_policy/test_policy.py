@@ -374,6 +374,116 @@ def test_multi_source_priority_ps5_beats_pc():
     assert p.preset_enum == "uuid-ps5"
 
 
+# --- Gaming-Activity-Gate (Fix 2026-08-05) --------------------------------- #
+# Regression: Der Activity-State-Vertrag (benni_core_state) liefert bei aktivem
+# Spiel `gaming` (nicht mehr `free_time`). Das alte Gate ACTIVITY_PRESET_DRIVING
+# blockierte dadurch die Gaming-Policy für JEDES Spiel. Eigenes Gate
+# GAMING_ACTIVITY_STATES lässt `gaming` (+ Rückwärtskompat free_time/idle) zu,
+# `pc_active` bleibt draußen. Live-Enum→Look (pc): 1=Hearthstone, 2=Overwatch.
+_GAMES = {"1": "Hearthstone", "2": "Overwatch"}
+
+
+def test_gaming_fires_on_gaming_state_enum1_hearthstone():
+    pol = P.make_gaming_policy("pc", "1", _GAMES)
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_GAMING, day_state="late_evening",
+             season=C.SEASON_SUMMER, media_device="pc"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "gaming:pc:1"
+    assert p.preset_enum == "Hearthstone"
+
+
+def test_gaming_fires_on_gaming_state_enum2_overwatch():
+    pol = P.make_gaming_policy("pc", "2", _GAMES)
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_GAMING, day_state="late_evening",
+             season=C.SEASON_SUMMER, media_device="pc"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "gaming:pc:2"
+    assert p.preset_enum == "Overwatch"
+
+
+def test_gaming_wrong_source_no_look_while_gaming():
+    # Aktives Gaming, aber media_device zeigt nicht auf die Subentry-Quelle.
+    pol = P.make_gaming_policy("pc", "1", _GAMES)
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_GAMING, day_state="late_evening",
+             season=C.SEASON_SUMMER, media_device="ps5"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "late_evening"  # Tagesphasen-Fallback, kein Gaming-Look
+
+
+def test_gaming_unknown_mapping_no_look_while_gaming():
+    # Aktive Quelle + Gaming, aber Enum-Wert nicht im Mapping.
+    pol = P.make_gaming_policy("pc", "3", _GAMES)
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_GAMING, day_state="late_evening",
+             season=C.SEASON_SUMMER, media_device="pc"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "late_evening"
+
+
+def test_gaming_non_string_mapping_no_look_while_gaming():
+    pol = P.make_gaming_policy("pc", "1", {"1": 123})
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_GAMING, day_state="late_evening",
+             season=C.SEASON_SUMMER, media_device="pc"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "late_evening"
+
+
+def test_gaming_missing_classifier_value_no_look_while_gaming():
+    pol = P.make_gaming_policy("pc", None, {"": "Hearthstone"})
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_GAMING, day_state="late_evening",
+             season=C.SEASON_SUMMER, media_device="pc"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "late_evening"
+
+
+def test_gaming_pc_active_alone_stays_blocked():
+    # `pc_active` = nur „PC an" (ohne Gaming-Kontext) → KEIN Gaming-Look, selbst
+    # wenn Quelle + Enum-Mapping passen. Bewusst außerhalb GAMING_ACTIVITY_STATES.
+    pol = P.make_gaming_policy("pc", "1", _GAMES)
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_PC_ACTIVE, day_state="late_evening",
+             season=C.SEASON_SUMMER, media_device="pc"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "late_evening"
+
+
+def test_gaming_backward_compat_free_time_still_fires():
+    # Rückwärtskompatibilität: `free_time` löst die Gaming-Policy weiterhin aus.
+    pol = P.make_gaming_policy("pc", "1", _GAMES)
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_FREE_TIME, day_state="late_evening",
+             season=C.SEASON_SUMMER, media_device="pc"),
+        extra_policies=[pol],
+    )
+    assert p.mode == "gaming:pc:1"
+    assert p.preset_enum == "Hearthstone"
+
+
+def test_music_gate_unchanged_by_gaming_state():
+    # Schutz gegen versehentliche Gate-Verbreiterung: die Musik-Policy nutzt
+    # weiterhin ACTIVITY_PRESET_DRIVING, `gaming` darf sie NICHT auslösen —
+    # selbst mit passendem Geburtstag + Mapping.
+    pol = P.make_music_policy("party", {"party": "disco-uuid"})
+    p = _decide(
+        _ctx(activity_state=C.ACTIVITY_GAMING, calendar_theme="geburtstag",
+             day_state="late_evening"),
+        extra_policies=[pol],
+    )
+    assert p.mode != C.MODE_MUSIC_PARTY
+
+
 def test_music_subentry_minihub():
     pol = P.make_music_policy("party", {"party": "disco-uuid", "rock": "rock-uuid"})
     base = dict(activity_state=C.ACTIVITY_IDLE, day_state="late_evening")
@@ -405,6 +515,101 @@ def test_cinema_not_hijacked_by_gaming_media_device():
     assert _decide(_ctx(media_device="pc", **base)).mode != C.MODE_CINEMA
     # media_device meldet TV → positives Signal → Cinema feuert auch ohne media_context.
     assert _decide(_ctx(media_device="tv", **base)).mode == C.MODE_CINEMA
+
+
+def test_away_is_hard_off_with_open_lux_gate():
+    p = _decide(_ctx(
+        bio_state=C.BIO_AWAKE,
+        presence_personal=C.PRESENCE_AWAY,
+        day_state=C.PHASE_AFTERNOON,
+        season=C.SEASON_SUMMER,
+    ), lux_gate_on=True)
+    assert p.mode == C.MODE_IDLE
+    assert p.apply_kind == P.APPLY_OFF
+    assert "presence_personal away/parents" in p.reason
+
+
+def test_away_is_hard_off_with_closed_lux_gate():
+    p = _decide(_ctx(
+        bio_state=C.BIO_AWAKE,
+        presence_personal=C.PRESENCE_AWAY,
+        day_state=C.PHASE_AFTERNOON,
+        season=C.SEASON_SUMMER,
+    ), lux_gate_on=False)
+    assert p.mode == C.MODE_IDLE
+    assert p.apply_kind == P.APPLY_OFF
+
+
+def test_presence_simulation_remains_the_away_exception():
+    p = _decide(_ctx(
+        bio_state=C.BIO_AWAKE,
+        presence_personal=C.PRESENCE_AWAY,
+        activity_state=C.ACTIVITY_IDLE,
+        day_state=C.PHASE_LATE_EVENING,
+        season=C.SEASON_SUMMER,
+    ), lux_gate_on=True)
+    assert p.mode == C.MODE_PRESENCE_SIM
+
+
+def test_new_core_day_phases_are_accepted():
+    for phase in C.CORE_DAY_PHASES:
+        p = _decide(_ctx(activity_state=C.ACTIVITY_IDLE, day_state=phase))
+        assert p.mode == phase
+        assert p.preset_enum == f"winter_{phase}"
+
+
+def test_event_theme_contract_values_override_season():
+    for theme in (
+        "geburtstag", "silvester", "pride", "advent_1", "advent_2", "advent_3",
+        "advent_4", "stpatricks",
+    ):
+        p = _decide(_ctx(
+            activity_state=C.ACTIVITY_IDLE,
+            day_state=C.PHASE_EVENING,
+            season=C.SEASON_WINTER,
+            calendar_theme=theme,
+        ))
+        assert p.preset_enum == f"{theme}_{C.PHASE_EVENING}"
+
+
+def test_gaming_invalid_activity_values_are_safe():
+    pol = P.make_gaming_policy("pc", "1", {"1": "Hearthstone"})
+    for activity in (None, "unknown", "unavailable"):
+        p = _decide(_ctx(
+            activity_state=activity,
+            day_state=C.PHASE_LATE_EVENING,
+            media_device="pc",
+        ), extra_policies=[pol])
+        assert p.mode == C.PHASE_LATE_EVENING
+
+
+def test_gaming_idle_compatibility_is_preserved():
+    pol = P.make_gaming_policy("pc", "1", {"1": "Hearthstone"})
+    p = _decide(_ctx(
+        activity_state=C.ACTIVITY_IDLE,
+        day_state=C.PHASE_LATE_EVENING,
+        media_device="pc",
+    ), extra_policies=[pol])
+    assert p.preset_enum == "Hearthstone"
+
+
+def test_invalid_thresholds_fall_back_without_crashing():
+    invalid = {
+        C.SEASON_WINTER: {"dark": 500, "bright": 100},
+        C.SEASON_SUMMER: {"dark": "not-a-number"},
+    }
+    assert P.lux_gate(100, C.SEASON_WINTER, False, day_state_known=True, thresholds=invalid)
+    normalized = P.normalize_lux_thresholds(invalid)
+    assert normalized[C.SEASON_WINTER] == C.DEFAULT_LUX_THRESHOLDS[C.SEASON_WINTER]
+    assert normalized[C.SEASON_SUMMER] == C.DEFAULT_LUX_THRESHOLDS[C.SEASON_SUMMER]
+
+
+def test_brightness_and_priority_validation_preserve_safe_values():
+    assert P.normalize_brightness_profile({"late_night": 400, "bad": "x", "flag": True}) == {
+        "late_night": 255,
+    }
+    assert P.resolve_priority(0, 12) == 0
+    assert P.resolve_priority("invalid", 12) == 12
 
 
 def test_dayphase_policy_is_terminal():

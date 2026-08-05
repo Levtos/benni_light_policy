@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "context": {
-        "title": "1/5 · Kontext (Benni Toolbox)",
-        "description": "Kern-Kontext-Sensoren — aus der Toolbox vorausgefüllt, i.d.R. nur bestätigen. Day State ist das wichtigste Gate.",
+        "title": "1/5 · Context (Benni Toolbox)",
+        "description": "Core context sensors — prefilled from the toolbox; usually just confirm them. Day State is the primary gate.",
         "data": {
           "bio_state_entity": "Bio State",
           "activity_state_entity": "Activity State",
@@ -13,63 +13,63 @@
         }
       },
       "environment": {
-        "title": "2/5 · Umwelt & Medien",
+        "title": "2/5 · Environment & Media",
         "data": {
-          "lux_entity": "Außenhelligkeit (Lux)",
-          "weather_entity": "Wetter (Icon, R10)",
-          "season_entity": "Jahreszeit",
-          "calendar_theme_entity": "Kalender-Thema / Day Context",
+          "lux_entity": "Outdoor brightness (lux)",
+          "weather_entity": "Weather (icon, R10)",
+          "season_entity": "Season",
+          "calendar_theme_entity": "Calendar theme / Day Context",
           "entertainment_stable_entity": "Entertainment Active",
           "media_device_entity": "Media Device (PC / PS5 / TV …)",
           "media_context_entity": "Media Context (idle / tv / streaming / gaming / …)"
         }
       },
       "signals": {
-        "title": "3/5 · Weitere Signale",
+        "title": "3/5 · Additional signals",
         "data": {
-          "guest_entity": "Gast-Status (Eltern)",
+          "guest_entity": "Guest status (parents)",
           "presence_transition_entity": "Presence Transition (coming_home, R12)",
-          "overnight_away_entity": "Übernacht-Auswärts-Signal",
+          "overnight_away_entity": "Overnight-away signal",
           "system_ready_entity": "System-Ready"
         }
       },
       "lamps": {
-        "title": "4/5 · Lampengruppen",
+        "title": "4/5 · Light groups",
         "data": {
-          "group_main": "Hauptgruppe",
-          "group_ceiling": "Deckenlampe (CCT)",
-          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)",
-          "wake_teardown_areas": "Wake-Teardown-Bereiche (Schlafzimmer/Küche, beim Verlassen des Weck-/Work-Home-Zustands aus)"
+          "group_main": "Main group",
+          "group_ceiling": "Ceiling light (CCT)",
+          "group_all": "All living-room lights (hard-off target)",
+          "wake_teardown_areas": "Wake teardown areas (turn off bedroom/kitchen lights when leaving wake/work-home)"
         }
       },
       "options": {
-        "title": "5/5 · Optionen",
-        "description": "Apply ist standardmäßig AUS (Shadow). Spezialfälle (Gaming, Musik, Ringe, Flur, Bad, Wake-Up) später als Subentries hinzufügen.",
+        "title": "5/5 · Options",
+        "description": "Apply is OFF by default (shadow mode). Add special cases (gaming, music, rings, hallway, bathroom, wake-up) later as subentries.",
         "data": {
-          "apply_enabled": "Apply aktiviert (aus = Shadow)",
-          "startup_block_seconds": "Startup-Block (Sekunden)",
-          "crossfade_seconds": "Crossfade-Dauer (Sekunden)"
+          "apply_enabled": "Apply enabled (off = shadow mode)",
+          "startup_block_seconds": "Startup block (seconds)",
+          "crossfade_seconds": "Crossfade duration (seconds)"
         }
       }
     },
     "abort": {
-      "single_instance_allowed": "Es ist bereits eine Light-Policy-Instanz konfiguriert."
+      "single_instance_allowed": "A Light Policy instance is already configured."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Light Policy — Hub-Optionen",
+        "title": "Light Policy — hub options",
         "menu_options": {
-          "context": "Kontext",
-          "environment": "Umwelt & Medien",
-          "signals": "Weitere Signale",
-          "lamps": "Lampengruppen",
-          "options": "Optionen (Apply, Crossfade …)"
+          "context": "Context",
+          "environment": "Environment & media",
+          "signals": "Additional signals",
+          "lamps": "Light groups",
+          "options": "Options (apply, crossfade …)"
         }
       },
       "context": {
-        "title": "Kontext",
+        "title": "Context",
         "data": {
           "bio_state_entity": "Bio State",
           "activity_state_entity": "Activity State",
@@ -79,179 +79,179 @@
         }
       },
       "environment": {
-        "title": "Umwelt & Medien",
+        "title": "Environment & media",
         "data": {
-          "lux_entity": "Außenhelligkeit (Lux)",
-          "weather_entity": "Wetter (Icon, R10)",
-          "season_entity": "Jahreszeit",
-          "calendar_theme_entity": "Kalender-Thema / Day Context",
+          "lux_entity": "Outdoor brightness (lux)",
+          "weather_entity": "Weather (icon, R10)",
+          "season_entity": "Season",
+          "calendar_theme_entity": "Calendar theme / Day Context",
           "entertainment_stable_entity": "Entertainment Active",
           "media_device_entity": "Media Device (PC / PS5 / TV …)",
           "media_context_entity": "Media Context (idle / tv / streaming / gaming / …)"
         }
       },
       "signals": {
-        "title": "Weitere Signale",
+        "title": "Additional signals",
         "data": {
-          "guest_entity": "Gast-Status (Eltern)",
+          "guest_entity": "Guest status (parents)",
           "presence_transition_entity": "Presence Transition (coming_home, R12)",
-          "overnight_away_entity": "Übernacht-Auswärts-Signal",
+          "overnight_away_entity": "Overnight-away signal",
           "system_ready_entity": "System-Ready"
         }
       },
       "lamps": {
-        "title": "Lampengruppen",
+        "title": "Light groups",
         "data": {
-          "group_main": "Hauptgruppe",
-          "group_ceiling": "Deckenlampe (CCT)",
-          "group_all": "Alle Wohnzimmer (Hard-Off-Ziel)",
-          "wake_teardown_areas": "Wake-Teardown-Bereiche (Schlafzimmer/Küche, beim Verlassen des Weck-/Work-Home-Zustands aus)"
+          "group_main": "Main group",
+          "group_ceiling": "Ceiling light (CCT)",
+          "group_all": "All living-room lights (hard-off target)",
+          "wake_teardown_areas": "Wake teardown areas (turn off bedroom/kitchen lights when leaving wake/work-home)"
         }
       },
       "options": {
-        "title": "Optionen",
+        "title": "Options",
         "data": {
-          "apply_enabled": "Apply aktiviert (aus = Shadow)",
-          "startup_block_seconds": "Startup-Block (Sekunden)",
-          "crossfade_seconds": "Crossfade-Dauer (Sekunden)"
+          "apply_enabled": "Apply enabled (off = shadow mode)",
+          "startup_block_seconds": "Startup block (seconds)",
+          "crossfade_seconds": "Crossfade duration (seconds)"
         }
       }
     }
   },
   "config_subentries": {
     "gaming": {
-      "initiate_flow": { "user": "Gaming-Policy hinzufügen" },
-      "entry_type": "Gaming-Policy (Minihub pro Quelle)",
+      "initiate_flow": { "user": "Add gaming policy" },
+      "entry_type": "Gaming policy (minihub per source)",
       "step": {
         "user": {
-          "title": "Gaming-Minihub (z.B. PC / PS5 / Nintendo)",
-          "description": "Eine Subentry pro Quelle. Hub liest media_device (aus benni_media_state) → matched gegen source_id. Pro Quelle bis zu 8 Enum-Werte → Look-Slug/-Name. Konflikt bei mehreren aktiven Quellen wird über source_priority gelöst (kleiner = höher; PS5=9, Nintendo=10, Cinema=11, PC=12).",
+          "title": "Gaming minihub (e.g. PC / PS5 / Nintendo)",
+          "description": "One subentry per source. The hub reads media_device (from benni_media_state) and matches it against source_id. Up to 8 enum values per source map to a look slug/name. Conflicts between active sources are resolved by source_priority (lower wins; PS5=9, Nintendo=10, Cinema=11, PC=12).",
           "data": {
-            "name": "Name (z.B. „Gaming PC“)",
-            "source_id": "Source-ID (matched media_device: pc / ps5 / nintendo)",
-            "source_priority": "Priorität (leer = Default je Source; sonst Zahl, kleiner = höher)",
-            "classifier_entity": "Title-Classifier-Entity (Enum 0/1/2/…)",
-            "mapping_value_0": "Slot 1 · Enum-Wert (z.B. 0)",
-            "mapping_preset_0": "Slot 1 · Look-Slug/-Name",
-            "mapping_value_1": "Slot 2 · Enum-Wert",
-            "mapping_preset_1": "Slot 2 · Look-Slug/-Name",
-            "mapping_value_2": "Slot 3 · Enum-Wert",
-            "mapping_preset_2": "Slot 3 · Look-Slug/-Name",
-            "mapping_value_3": "Slot 4 · Enum-Wert",
-            "mapping_preset_3": "Slot 4 · Look-Slug/-Name",
-            "mapping_value_4": "Slot 5 · Enum-Wert",
-            "mapping_preset_4": "Slot 5 · Look-Slug/-Name",
-            "mapping_value_5": "Slot 6 · Enum-Wert",
-            "mapping_preset_5": "Slot 6 · Look-Slug/-Name",
-            "mapping_value_6": "Slot 7 · Enum-Wert",
-            "mapping_preset_6": "Slot 7 · Look-Slug/-Name",
-            "mapping_value_7": "Slot 8 · Enum-Wert",
-            "mapping_preset_7": "Slot 8 · Look-Slug/-Name"
+            "name": "Name (e.g. “Gaming PC”)",
+            "source_id": "Source ID (matches media_device: pc / ps5 / nintendo)",
+            "source_priority": "Priority (blank = source default; otherwise lower number wins)",
+            "classifier_entity": "Title classifier entity (enum 0/1/2/…)",
+            "mapping_value_0": "Slot 1 · Enum value (e.g. 0)",
+            "mapping_preset_0": "Slot 1 · Look slug/name",
+            "mapping_value_1": "Slot 2 · Enum value",
+            "mapping_preset_1": "Slot 2 · Look slug/name",
+            "mapping_value_2": "Slot 3 · Enum value",
+            "mapping_preset_2": "Slot 3 · Look slug/name",
+            "mapping_value_3": "Slot 4 · Enum value",
+            "mapping_preset_3": "Slot 4 · Look slug/name",
+            "mapping_value_4": "Slot 5 · Enum value",
+            "mapping_preset_4": "Slot 5 · Look slug/name",
+            "mapping_value_5": "Slot 6 · Enum value",
+            "mapping_preset_5": "Slot 6 · Look slug/name",
+            "mapping_value_6": "Slot 7 · Enum value",
+            "mapping_preset_6": "Slot 7 · Look slug/name",
+            "mapping_value_7": "Slot 8 · Enum value",
+            "mapping_preset_7": "Slot 8 · Look slug/name"
           }
         }
       }
     },
     "music": {
-      "initiate_flow": { "user": "Musik-Party-Policy hinzufügen" },
-      "entry_type": "Musik-Party-Minihub",
+      "initiate_flow": { "user": "Add music-party policy" },
+      "entry_type": "Music-party minihub",
       "step": {
         "user": {
-          "title": "Musik-Party-Minihub",
-          "description": "Musik-Classifier liefert N Werte → eigenen Look (Slug/Name) pro Wert. Optional nur bei Kalender-Thema „geburtstag“.",
+          "title": "Music-party minihub",
+          "description": "The music classifier provides values that map to a look (slug/name). Optionally require the calendar theme “geburtstag”.",
           "data": {
             "name": "Name",
-            "classifier_entity": "Title-Classifier-Entity (Musik-Quelle)",
-            "require_birthday": "Nur bei Kalender-Thema „geburtstag“",
-            "mapping_value_0": "Slot 1 · Classifier-Wert",
-            "mapping_preset_0": "Slot 1 · Look-Slug/-Name",
-            "mapping_value_1": "Slot 2 · Classifier-Wert",
-            "mapping_preset_1": "Slot 2 · Look-Slug/-Name",
-            "mapping_value_2": "Slot 3 · Classifier-Wert",
-            "mapping_preset_2": "Slot 3 · Look-Slug/-Name",
-            "mapping_value_3": "Slot 4 · Classifier-Wert",
-            "mapping_preset_3": "Slot 4 · Look-Slug/-Name",
-            "mapping_value_4": "Slot 5 · Classifier-Wert",
-            "mapping_preset_4": "Slot 5 · Look-Slug/-Name",
-            "mapping_value_5": "Slot 6 · Classifier-Wert",
-            "mapping_preset_5": "Slot 6 · Look-Slug/-Name",
-            "mapping_value_6": "Slot 7 · Classifier-Wert",
-            "mapping_preset_6": "Slot 7 · Look-Slug/-Name",
-            "mapping_value_7": "Slot 8 · Classifier-Wert",
-            "mapping_preset_7": "Slot 8 · Look-Slug/-Name"
+            "classifier_entity": "Title classifier entity (music source)",
+            "require_birthday": "Only for calendar theme “geburtstag”",
+            "mapping_value_0": "Slot 1 · Classifier value",
+            "mapping_preset_0": "Slot 1 · Look slug/name",
+            "mapping_value_1": "Slot 2 · Classifier value",
+            "mapping_preset_1": "Slot 2 · Look slug/name",
+            "mapping_value_2": "Slot 3 · Classifier value",
+            "mapping_preset_2": "Slot 3 · Look slug/name",
+            "mapping_value_3": "Slot 4 · Classifier value",
+            "mapping_preset_3": "Slot 4 · Look slug/name",
+            "mapping_value_4": "Slot 5 · Classifier value",
+            "mapping_preset_4": "Slot 5 · Look slug/name",
+            "mapping_value_5": "Slot 6 · Classifier value",
+            "mapping_preset_5": "Slot 6 · Look slug/name",
+            "mapping_value_6": "Slot 7 · Classifier value",
+            "mapping_preset_6": "Slot 7 · Look slug/name",
+            "mapping_value_7": "Slot 8 · Classifier value",
+            "mapping_preset_7": "Slot 8 · Look slug/name"
           }
         }
       }
     },
     "notification_ring": {
-      "initiate_flow": { "user": "Notification-RGB (Ringe) hinzufügen" },
-      "entry_type": "Notification-RGB (Minihub)",
+      "initiate_flow": { "user": "Add notification RGB (rings)" },
+      "entry_type": "Notification RGB (minihub)",
       "step": {
         "user": {
-          "title": "Notification-RGB (Aqara Ringe)",
-          "description": "Mappt Activity-State-Werte (z.B. free_time, gaming, sleep) auf Aqara-Effekt-Namen. Bis zu 8 Mappings, simultan auf allen Ringen.",
+          "title": "Notification RGB (Aqara rings)",
+          "description": "Maps Activity State values (e.g. free_time, gaming, sleep) to Aqara effect names. Up to 8 mappings, applied simultaneously to all rings.",
           "data": {
             "name": "Name",
-            "ring_target_entities": "RGB-Ringe (Aqara, mehrere)",
-            "activity_state_entity": "Activity-Quelle (optional — sonst Hub)",
-            "mapping_value_0": "Slot 1 · Activity-State",
-            "mapping_preset_0": "Slot 1 · Aqara-Effekt-Name",
-            "mapping_value_1": "Slot 2 · Activity-State",
-            "mapping_preset_1": "Slot 2 · Aqara-Effekt-Name",
-            "mapping_value_2": "Slot 3 · Activity-State",
-            "mapping_preset_2": "Slot 3 · Aqara-Effekt-Name",
-            "mapping_value_3": "Slot 4 · Activity-State",
-            "mapping_preset_3": "Slot 4 · Aqara-Effekt-Name",
-            "mapping_value_4": "Slot 5 · Activity-State",
-            "mapping_preset_4": "Slot 5 · Aqara-Effekt-Name",
-            "mapping_value_5": "Slot 6 · Activity-State",
-            "mapping_preset_5": "Slot 6 · Aqara-Effekt-Name",
-            "mapping_value_6": "Slot 7 · Activity-State",
-            "mapping_preset_6": "Slot 7 · Aqara-Effekt-Name",
-            "mapping_value_7": "Slot 8 · Activity-State",
-            "mapping_preset_7": "Slot 8 · Aqara-Effekt-Name"
+            "ring_target_entities": "RGB rings (Aqara, multiple)",
+            "activity_state_entity": "Activity source (optional — otherwise hub)",
+            "mapping_value_0": "Slot 1 · Activity State",
+            "mapping_preset_0": "Slot 1 · Aqara effect name",
+            "mapping_value_1": "Slot 2 · Activity State",
+            "mapping_preset_1": "Slot 2 · Aqara effect name",
+            "mapping_value_2": "Slot 3 · Activity State",
+            "mapping_preset_2": "Slot 3 · Aqara effect name",
+            "mapping_value_3": "Slot 4 · Activity State",
+            "mapping_preset_3": "Slot 4 · Aqara effect name",
+            "mapping_value_4": "Slot 5 · Activity State",
+            "mapping_preset_4": "Slot 5 · Aqara effect name",
+            "mapping_value_5": "Slot 6 · Activity State",
+            "mapping_preset_5": "Slot 6 · Aqara effect name",
+            "mapping_value_6": "Slot 7 · Activity State",
+            "mapping_preset_6": "Slot 7 · Aqara effect name",
+            "mapping_value_7": "Slot 8 · Activity State",
+            "mapping_preset_7": "Slot 8 · Aqara effect name"
           }
         }
       }
     },
     "hallway": {
-      "initiate_flow": { "user": "Flur-Policy hinzufügen" },
-      "entry_type": "Flur",
+      "initiate_flow": { "user": "Add hallway policy" },
+      "entry_type": "Hallway",
       "step": {
         "user": {
-          "title": "Flur (R14)",
+          "title": "Hallway (R14)",
           "data": {
             "name": "Name",
-            "hallway_light": "Flurlicht",
-            "hallway_trigger_entities": "Trigger: Tür/Bewegung"
+            "hallway_light": "Hallway light",
+            "hallway_trigger_entities": "Triggers: door/motion"
           }
         }
       }
     },
     "bathroom": {
-      "initiate_flow": { "user": "Bad-Policy hinzufügen" },
-      "entry_type": "Bad",
+      "initiate_flow": { "user": "Add bathroom policy" },
+      "entry_type": "Bathroom",
       "step": {
         "user": {
-          "title": "Bad-Vergessensschutz (R15)",
+          "title": "Bathroom forgetfulness protection (R15)",
           "data": {
             "name": "Name",
-            "bathroom_light": "Bad-Licht / -Schalter (Light oder Switch)",
-            "bathroom_vibration_entity": "Klodeckel-Vibrationssensor",
-            "bathroom_timeout_seconds": "Timeout (Sekunden, Standard 3600)"
+            "bathroom_light": "Bathroom light/switch (light or switch)",
+            "bathroom_vibration_entity": "Toilet-seat vibration sensor",
+            "bathroom_timeout_seconds": "Timeout (seconds, default 3600)"
           }
         }
       }
     },
     "wake_up": {
-      "initiate_flow": { "user": "Wake-Up-Licht hinzufügen" },
-      "entry_type": "Wake-Up",
+      "initiate_flow": { "user": "Add wake-up light" },
+      "entry_type": "Wake-up",
       "step": {
         "user": {
-          "title": "Aufsteh-/Wake-Up-Licht (R6, via Wake-Planner → bio_state=waking)",
-          "description": "Welche Lampen sollen beim Aufstehen ansteuern? Mehrere erlaubt (z.B. Schlafzimmer + Wohnzimmer). Stufenweise Helligkeit übernimmt der Wake-Planner.",
+          "title": "Wake-up light (R6, via Wake Planner → bio_state=waking)",
+          "description": "Which lights should turn on when waking up? Multiple lights are supported (e.g. bedroom + living room). The Wake Planner controls the brightness sequence.",
           "data": {
             "name": "Name",
-            "wake_up_targets": "Aufsteh-Lampen (mehrere)"
+            "wake_up_targets": "Wake-up lights (multiple)"
           }
         }
       }
