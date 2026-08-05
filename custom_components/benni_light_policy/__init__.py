@@ -52,8 +52,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coord = LightPolicyCoordinator(hass, entry)
     await coord.async_load()
-    coord.async_start()
     await coord.async_evaluate()
+    coord.async_start()
 
     data = hass.data.setdefault(DOMAIN, {})
     data[entry.entry_id] = {DATA_COORDINATOR: coord}

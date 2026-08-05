@@ -6,7 +6,6 @@ const TYPE_META = {
   wake_up: { icon: "⏰", label: "Wake-Up", note: "Raw Targets · direktes light.turn_on" },
   hallway: { icon: "🚪", label: "Flur (R14)", note: "Trigger + Timer + 3× Off" },
   bathroom: { icon: "🛁", label: "Bad (R15)", note: "Vergessensschutz" },
-  bedroom: { icon: "🛏️", label: "Schlafzimmer", note: "Bettgeh-Signal (R16)" },
   notification_ring: { icon: "🔔", label: "Notification / Ring", note: "Aqara-Effekt (AAL), kein Look" },
 };
 const HIDDEN_TYPES = new Set(["gaming", "music"]);

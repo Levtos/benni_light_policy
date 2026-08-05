@@ -29,6 +29,8 @@ class BlpApp extends HTMLElement {
     this._view = "overview";
     this._booted = false;
     this._hass = null;
+    this._refreshTimer = null;
+    this._refreshPromise = null;
   }
 
   set hass(v) {
@@ -40,8 +42,18 @@ class BlpApp extends HTMLElement {
   }
   get hass() { return this._hass; }
 
-  connectedCallback() {}
-  disconnectedCallback() {}
+  connectedCallback() {
+    if (this._refreshTimer == null) {
+      this._refreshTimer = setInterval(() => this.refresh(), 30000);
+    }
+  }
+
+  disconnectedCallback() {
+    if (this._refreshTimer != null) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
+    }
+  }
 
   async _boot() {
     if (this._booted) return;
@@ -51,12 +63,20 @@ class BlpApp extends HTMLElement {
   }
 
   async refresh() {
+    if (this._refreshPromise) return this._refreshPromise;
+    this._refreshPromise = (async () => {
+      try {
+        await this._store.refresh();
+      } catch (e) {
+        /* transient */
+      }
+      this._renderLive();
+    })();
     try {
-      await this._store.refresh();
-    } catch (e) {
-      /* transient */
+      await this._refreshPromise;
+    } finally {
+      this._refreshPromise = null;
     }
-    this._renderLive();
   }
 
   _ctx() {

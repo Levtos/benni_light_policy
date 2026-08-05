@@ -11,7 +11,9 @@ bestehenden ConfigEntries automatisch auf die Core-Integrationen:
 - `sensor.weather_season_meteorological_atomic` ->
   `sensor.benni_device_weather_season_meteorological`
 - `sensor.benni_context_day_context` /
-  `sensor.benni_core_state_day_context` ->
-  `sensor.benni_combined_context_day_context`
+  `sensor.benni_combined_context_day_context` ->
+  `sensor.benni_core_state_day_context`
+- Legacy Core-State context/activity/presence entities -> their matching
+  `sensor.benni_core_state_*` clean IDs
 - `binary_sensor.benni_media_context_entertainment_active` ->
   `binary_sensor.benni_media_state_entertainment_active`

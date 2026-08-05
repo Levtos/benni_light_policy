@@ -26,11 +26,12 @@ from .const import (
     ACTIVITY_WORK_HOME,
     BIO_SLEEP,
     BIO_WAKING,
+    CALENDAR_BIRTHDAY,
     COLOR_TEMP_WAKING,
     COLOR_TEMP_WORK_HOME,
-    DAY_PHASES,
     DEFAULT_BRIGHTNESS,
     DEFAULT_LUX_THRESHOLDS,
+    GAMING_ACTIVITY_STATES,
     GROUP_ALL,
     GROUP_CEILING,
     GROUP_MAIN,
@@ -40,8 +41,6 @@ from .const import (
     MODE_HOUSEHOLD,
     MODE_IDLE,
     MODE_MUSIC_PARTY,
-    MODE_PC_HEARTHSTONE,
-    MODE_PC_OVERWATCH,
     MODE_PRESENCE_SIM,
     MODE_PRIVATE_TIME,
     MODE_WAKING,
@@ -49,11 +48,8 @@ from .const import (
     PRESENCE_SIM_PHASES,
     PRESENCE_SIM_TRIGGERS,
     PRESENCE_TRANSITION_COMING_HOME,
-    PRESET_PC_HEARTHSTONE,
-    PRESET_PC_OVERWATCH,
     SEASON_WINTER,
-    TITLE_HEARTHSTONE,
-    TITLE_OVERWATCH,
+    SUPPORTED_DAY_PHASES,
     TV_MEDIA_CONTEXTS,
     WEATHER_DARK_DROP_RATIO,
     WEATHER_DARK_ICONS,
@@ -73,6 +69,14 @@ THEME_MAP = {
     "karneval": "carnival",
     "fasching": "carnival",
     "carnival": "carnival",
+    "geburtstag": "geburtstag",
+    "silvester": "silvester",
+    "pride": "pride",
+    "advent_1": "advent_1",
+    "advent_2": "advent_2",
+    "advent_3": "advent_3",
+    "advent_4": "advent_4",
+    "stpatricks": "stpatricks",
 }
 # Party-Musik-Enums sind noch nicht definiert (Lastenheft OQ-2) — bis dahin
 # triggert music_party nicht.
@@ -158,6 +162,63 @@ class Plan:
         }
 
 
+def normalize_lux_thresholds(
+    thresholds: dict[str, Any] | None,
+) -> dict[str, tuple[int, int]]:
+    """Return structurally valid seasonal Lux thresholds with safe defaults.
+
+    Options may contain either the historical ``(dark, bright)`` tuple/list or
+    the documented ``{"dark": ..., "bright": ...}`` shape. Invalid, reversed,
+    or out-of-range seasons are ignored instead of crashing evaluation.
+    """
+    normalized = dict(DEFAULT_LUX_THRESHOLDS)
+    if not isinstance(thresholds, dict):
+        return normalized
+
+    for season, raw in thresholds.items():
+        if isinstance(raw, dict):
+            values = (raw.get("dark"), raw.get("bright"))
+        elif isinstance(raw, (tuple, list)) and len(raw) == 2:
+            values = (raw[0], raw[1])
+        else:
+            continue
+        try:
+            dark, bright = (int(value) for value in values)
+        except (TypeError, ValueError):
+            continue
+        if not (0 <= dark <= bright <= 100_000):
+            continue
+        normalized[str(season)] = (dark, bright)
+    return normalized
+
+
+def normalize_brightness_profile(profile: dict[str, Any] | None) -> dict[str, int]:
+    """Keep only scalar brightness values and clamp them to HA's 0..255 range."""
+    if not isinstance(profile, dict):
+        return {}
+    normalized: dict[str, int] = {}
+    for key, raw in profile.items():
+        if not isinstance(key, str) or isinstance(raw, bool):
+            continue
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            continue
+        normalized[key.strip()] = max(0, min(255, value))
+    return {key: value for key, value in normalized.items() if key}
+
+
+def resolve_priority(raw: Any, default: int) -> int:
+    """Parse an optional policy priority without losing an explicit zero."""
+    if raw in (None, ""):
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(0, value)
+
+
 # --------------------------------------------------------------------------- #
 # Lux-Gate (R1, Schmitt-Trigger mit saisonalen Schwellen)
 # --------------------------------------------------------------------------- #
@@ -184,7 +245,7 @@ def lux_gate(
         return False
     if weather_dark:
         return True
-    thr = thresholds or DEFAULT_LUX_THRESHOLDS
+    thr = normalize_lux_thresholds(thresholds)
     dark, bright = thr.get(season or SEASON_WINTER, thr[SEASON_WINTER])
     if lux is None:
         return bool(prev_gate)
@@ -313,7 +374,18 @@ def _phase_brightness(ctx: Context, profile: dict[str, int], phase: str) -> int 
 # jede dieser Arten wird dort zu einem konfigurierbaren Subentry-Typ.
 # --------------------------------------------------------------------------- #
 def _awake_phase(ctx: Context) -> str | None:
-    return ctx.day_state if ctx.day_state in DAY_PHASES else None
+    return ctx.day_state if ctx.day_state in SUPPORTED_DAY_PHASES else None
+
+
+def _presence_sim_active(ctx: Context) -> bool:
+    """Return whether the documented presence-simulation exception is active."""
+    awake_phase = _awake_phase(ctx)
+    return bool(
+        ctx.presence_personal in PRESENCE_SIM_TRIGGERS
+        and awake_phase in PRESENCE_SIM_PHASES
+        and not ctx.overnight_away
+        and ctx.presence_transition != PRESENCE_TRANSITION_COMING_HOME
+    )
 
 
 def _eval_waking(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
@@ -338,6 +410,12 @@ def _eval_sleep_off(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan |
 
 
 def _eval_lux_off(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
+    if ctx.presence_personal in PRESENCE_SIM_TRIGGERS and not _presence_sim_active(ctx):
+        return Plan(
+            mode=MODE_IDLE, preset_enum=MODE_IDLE, brightness=0, color_temp=None,
+            apply_kind=APPLY_OFF, targets=[], exclusive_off=[GROUP_ALL],
+            lux_gate_on=gate, reason="hard_off: presence_personal away/parents",
+        )
     if gate:
         return None
     return Plan(
@@ -384,12 +462,7 @@ def _eval_household(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan |
 def _eval_presence_sim(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
     # R12: coming_home beendet die Simulation sofort (noch bevor presence_personal flippt).
     awake_phase = _awake_phase(ctx)
-    if not (
-        ctx.presence_personal in PRESENCE_SIM_TRIGGERS
-        and awake_phase in PRESENCE_SIM_PHASES
-        and not ctx.overnight_away
-        and ctx.presence_transition != PRESENCE_TRANSITION_COMING_HOME
-    ):
+    if not _presence_sim_active(ctx):
         return None
     return Plan(
         mode=MODE_PRESENCE_SIM, preset_enum=_phase_preset(ctx, awake_phase),
@@ -482,7 +555,9 @@ def make_gaming_policy(
     target: str = GROUP_MAIN,
 ) -> PolicyDef:
     """Gaming-Minihub: eine Subentry pro Quelle (PC, PS5, Nintendo …).
-    Gate: media_device == source_id (Source ist aktiv) + activity in free/idle.
+    Gate: media_device == source_id (Source ist aktiv) + activity in
+    GAMING_ACTIVITY_STATES (`gaming` kanonisch, `free_time`/`idle` rückwärts-
+    kompatibel; `pc_active` bewusst ausgeschlossen — nur „PC an").
     Mapping classifier_value → Look-Ref (Name/Slug). Mehrere Quellen gleichzeitig:
     Konflikt wird über priority gelöst (PS5=9 < Nintendo=10 < Cinema=11 < PC=12).
     """
@@ -490,11 +565,16 @@ def make_gaming_policy(
     def _ev(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
         if ctx.media_device != source_id:
             return None
-        if ctx.activity_state not in ACTIVITY_PRESET_DRIVING:
+        # Eigenes Gaming-Gate (nicht ACTIVITY_PRESET_DRIVING, das die Musik-Policy
+        # nutzt): der Activity-Vertrag liefert bei aktivem Spiel `gaming`.
+        if ctx.activity_state not in GAMING_ACTIVITY_STATES:
             return None
-        preset = mappings.get(classifier_value or "")
-        if not preset:
+        if not isinstance(classifier_value, str) or not classifier_value.strip():
             return None
+        preset = mappings.get(classifier_value)
+        if not isinstance(preset, str) or not preset.strip():
+            return None
+        preset = preset.strip()
         # Brightness wie bei den Tagesphasen-Modi aus dem Profil (theme_phase) —
         # Gaming-Looks sollen die Tageszeit-/Theme-Helligkeit respektieren, nicht
         # auf der Preset-Default (255) landen. (Doku: „Brightness aus der Tagesphase".)
@@ -525,11 +605,14 @@ def make_music_policy(
     def _ev(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
         if ctx.activity_state not in ACTIVITY_PRESET_DRIVING:
             return None
-        if require_birthday and (ctx.calendar_theme or "").lower() != "geburtstag":
+        if require_birthday and (ctx.calendar_theme or "").lower() != CALENDAR_BIRTHDAY:
             return None
-        preset = mappings.get(classifier_value or "")
-        if not preset:
+        if not isinstance(classifier_value, str) or not classifier_value.strip():
             return None
+        preset = mappings.get(classifier_value)
+        if not isinstance(preset, str) or not preset.strip():
+            return None
+        preset = preset.strip()
         phase = _awake_phase(ctx) or "early_evening"
         return Plan(
             mode=MODE_MUSIC_PARTY, preset_enum=preset,
@@ -592,7 +675,7 @@ def decide(
     `extra_policies` = vom Hub aus Subentries gebaute Policies (Gaming/Musik),
     die mit den Kern-Policies nach Priorität konkurrieren.
     """
-    profile = {**DEFAULT_BRIGHTNESS, **(brightness_profile or {})}
+    profile = {**DEFAULT_BRIGHTNESS, **normalize_brightness_profile(brightness_profile)}
     plan = _arbitrate(ctx, lux_gate_on, profile, extra_policies)
 
     # Gating-Overlay — verändert nur apply_allowed/blockers, nie den Plan selbst.

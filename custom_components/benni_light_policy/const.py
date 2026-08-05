@@ -16,7 +16,7 @@ from typing import Final
 
 DOMAIN: Final[str] = "benni_light_policy"
 MODULE_ID: Final[str] = "light_policy"
-CONFIG_ENTRY_VERSION: Final[int] = 4
+CONFIG_ENTRY_VERSION: Final[int] = 5
 
 # Datenwurzel in hass.data[DOMAIN].
 DATA_COORDINATOR: Final[str] = "coordinator"
@@ -44,8 +44,6 @@ MODE_WORK_HOME: Final = "work_home"
 MODE_HOUSEHOLD: Final = "household"
 MODE_PRESENCE_SIM: Final = "presence_sim"
 MODE_MUSIC_PARTY: Final = "music_party"
-MODE_PC_OVERWATCH: Final = "pc_overwatch"
-MODE_PC_HEARTHSTONE: Final = "pc_hearthstone"
 MODE_CINEMA: Final = "cinema"
 
 # Day-State-Detailphasen (Fallback-Modi, Priorität 12).
@@ -63,9 +61,29 @@ DAY_PHASES: Final = (
     PHASE_EARLY_EVENING, PHASE_LATE_EVENING, PHASE_EARLY_NIGHT, PHASE_LATE_NIGHT,
 )
 
-# Phasen, in denen Anwesenheitssimulation läuft (early_evening..early_night).
+# Alias explicitly names the phase values that were deployed before Core-State
+# introduced its canonical nine-phase contract.
+LEGACY_DAY_PHASES: Final = DAY_PHASES
+
+# Core-State PR #30 führt einen neunstufigen Ziel-Contract ein. Die historische
+# Acht-Phasen-Menge bleibt für bereits laufende Deployments und bestehende Look-
+# Maps erhalten; Policy und Migration akzeptieren beide Generationen.
+PHASE_MIDDAY: Final = "midday"
+PHASE_LATE_AFTERNOON: Final = "late_afternoon"
+PHASE_EVENING: Final = "evening"
+CORE_DAY_PHASES: Final = (
+    PHASE_EARLY_NIGHT, PHASE_LATE_NIGHT, PHASE_EARLY_MORNING, PHASE_FORENOON,
+    PHASE_MIDDAY, PHASE_AFTERNOON, PHASE_LATE_AFTERNOON, PHASE_EVENING,
+    PHASE_LATE_EVENING,
+)
+SUPPORTED_DAY_PHASES: Final = tuple(dict.fromkeys((*CORE_DAY_PHASES, *LEGACY_DAY_PHASES)))
+
+# Phasen, in denen Anwesenheitssimulation läuft (alte und neue Abend-/Nachtwerte).
 PRESENCE_SIM_PHASES: Final = frozenset(
-    {PHASE_EARLY_EVENING, PHASE_LATE_EVENING, PHASE_EARLY_NIGHT}
+    {
+        PHASE_EARLY_EVENING, PHASE_LATE_EVENING, PHASE_EARLY_NIGHT,
+        PHASE_EVENING,
+    }
 )
 
 # --------------------------------------------------------------------------- #
@@ -82,6 +100,22 @@ ACTIVITY_FREE_TIME: Final = "free_time"
 ACTIVITY_IDLE: Final = "idle"
 ACTIVITY_PRESET_DRIVING: Final = frozenset({ACTIVITY_FREE_TIME, ACTIVITY_IDLE})
 
+# Kanonischer Gaming-Zustand (Activity-State-Vertrag von benni_core_state) sowie
+# „PC eingeschaltet, aber (noch) kein Spiel".
+ACTIVITY_GAMING: Final = "gaming"
+ACTIVITY_PC_ACTIVE: Final = "pc_active"
+
+# Eigenes Gate für make_gaming_policy — bewusst GETRENNT von
+# ACTIVITY_PRESET_DRIVING (das die Musik-Policy nutzt und hier NICHT verändert
+# wird). `gaming` ist der kanonische Gaming-Zustand; `free_time`/`idle` bleiben
+# aus Rückwärtskompatibilität erlaubt. `pc_active` ist bewusst NICHT enthalten:
+# es bedeutet nur „PC an" und trat in der Recorder-Historie ohne Gaming-Kontext
+# auf (media_context≠gaming, title_classifier_pc_enum=0). Echte Gaming-Erkennung
+# läuft über `gaming` (zusätzlich abgesichert durch media_device + Enum-Mapping).
+GAMING_ACTIVITY_STATES: Final = frozenset(
+    {ACTIVITY_GAMING, ACTIVITY_FREE_TIME, ACTIVITY_IDLE}
+)
+
 PRESENCE_HOME: Final = "zuhause"
 PRESENCE_AWAY: Final = "abwesend"
 PRESENCE_PARENTS: Final = "bei_eltern"
@@ -91,9 +125,6 @@ PRESENCE_SIM_TRIGGERS: Final = frozenset({PRESENCE_AWAY, PRESENCE_PARENTS})
 PRESENCE_TRANSITION_COMING_HOME: Final = "coming_home"
 PRESENCE_TRANSITION_LEAVING: Final = "leaving_home"
 
-TITLE_OVERWATCH: Final = "1"
-TITLE_HEARTHSTONE: Final = "2"
-
 SEASON_SPRING: Final = "spring"
 SEASON_SUMMER: Final = "summer"
 SEASON_AUTUMN: Final = "autumn"
@@ -101,8 +132,13 @@ SEASON_WINTER: Final = "winter"
 SEASONS: Final = (SEASON_SPRING, SEASON_SUMMER, SEASON_AUTUMN, SEASON_WINTER)
 
 # Event-Themes (THEME_MAP-Ziele) zusätzlich zu den Jahreszeiten — zusammen die
-# Zeilen der Tagesphasen-Matrix (Theme × Phase → Look).
-POLICY_EVENT_THEMES: Final = ("christmas", "easter", "halloween", "carnival")
+# Zeilen der Tagesphasen-Matrix (Theme × Phase → Look). Die Werte stammen aus
+# dem aktuellen Core-State-Kalender-Contract; deutsche Legacy-Namen werden in
+# policy.THEME_MAP auf diese Look-Schlüssel normalisiert.
+POLICY_EVENT_THEMES: Final = (
+    "christmas", "easter", "halloween", "carnival", "geburtstag", "silvester", "pride",
+    "advent_1", "advent_2", "advent_3", "advent_4", "stpatricks",
+)
 POLICY_THEMES: Final = (*SEASONS, *POLICY_EVENT_THEMES)
 # Feste Policy-Modi, die einen Look-Ref brauchen (keine Tagesphasen-Matrix).
 # `idle` = Hard-Off-Zustand: bekommt eine eigene Look-Map-Zuordnung (all_off-Look),
@@ -136,7 +172,6 @@ CONF_MEDIA_DEVICE: Final = "media_device_entity"
 CONF_MEDIA_CONTEXT: Final = "media_context_entity"
 
 # Apply-Schicht.
-CONF_PRESET_CATALOG: Final = "preset_catalog_entity"   # (deprecated, UX-Rework) ungenutzt seit Look-Kanal
 CONF_GROUP_MAIN: Final = "group_main"                  # Hauptgruppe (light/group entity_id)
 CONF_GROUP_CEILING: Final = "group_ceiling"            # Deckenlampe CCT
 CONF_GROUP_ALL: Final = "group_all"                    # Hard-Off-Ziel
@@ -153,8 +188,6 @@ CONF_HALLWAY_LIGHT: Final = "hallway_light"
 CONF_HALLWAY_TRIGGERS: Final = "hallway_trigger_entities"  # list[entity_id] Tür/Bewegung
 CONF_BATHROOM_LIGHT: Final = "bathroom_light"
 CONF_BATHROOM_VIBRATION: Final = "bathroom_vibration_entity"
-CONF_BEDROOM_GROUP: Final = "bedroom_group"
-CONF_AWAKE_MINUTES: Final = "awake_minutes_entity"
 CONF_RING_TARGETS: Final = "ring_target_entities"         # Aqara RGB Ringe (mehrere, simultan)
 CONF_RING_PRESET_MAP: Final = "ring_preset_map"           # dict activity_state -> effect name
 
@@ -174,8 +207,6 @@ SUBENTRY_TYPES: Final = (
 
 # Generische Subentry-Config-Keys (je Subentry nur seine eigenen Felder).
 CONF_CLASSIFIER_ENTITY: Final = "classifier_entity"   # Gaming/Musik: eigener Title-Classifier
-CONF_TRIGGER_VALUE: Final = "trigger_value"           # (legacy, einzeln) — ersetzt durch CONF_MAPPINGS
-CONF_PRESET_ENUM: Final = "preset_enum"               # (legacy, einzeln) — ersetzt durch CONF_MAPPINGS
 CONF_REQUIRE_BIRTHDAY: Final = "require_birthday"      # Musik: nur bei Kalender-Thema geburtstag
 CONF_BATHROOM_TIMEOUT: Final = "bathroom_timeout_seconds"
 CONF_WAKE_UP_TARGETS: Final = "wake_up_targets"
@@ -212,13 +243,14 @@ MEDIA_DEVICE_TV: Final = "tv"
 # auf anderen Anlagen schadlos (greift einfach nicht). IDs aus der Live-Anlage
 # (einhornzentrale) ermittelt: eindeutige Singletons brauchen kein Raussuchen.
 ENTITY_PREFILL: Final[dict[str, str]] = {
-    CONF_BIO_STATE: "sensor.benni_combined_context_bio_state",
-    CONF_ACTIVITY_STATE: "sensor.benni_combined_context_activity_state",
-    CONF_DAY_STATE: "sensor.benni_combined_context_day_state",
-    CONF_PRESENCE_PERSONAL: "sensor.benni_combined_context_presence_personal",
-    CONF_PRESENCE_HOUSEHOLD: "sensor.benni_combined_context_presence_household",
-    CONF_PRESENCE_TRANSITION: "sensor.benni_combined_context_presence_transition",
-    CONF_CALENDAR_THEME: "sensor.benni_combined_context_day_context",
+    # Core-State PR #25/#31: Clean-IDs sind der kanonische Consumer-Contract.
+    CONF_BIO_STATE: "sensor.benni_core_state_bio_state",
+    CONF_ACTIVITY_STATE: "sensor.benni_core_state_activity_state",
+    CONF_DAY_STATE: "sensor.benni_core_state_day_state",
+    CONF_PRESENCE_PERSONAL: "sensor.benni_core_state_presence_personal",
+    CONF_PRESENCE_HOUSEHOLD: "sensor.benni_core_state_presence_household",
+    CONF_PRESENCE_TRANSITION: "sensor.benni_core_state_presence_transition",
+    CONF_CALENDAR_THEME: "sensor.benni_core_state_day_context",
     CONF_LUX: "sensor.benni_device_garden_lux",
     # FLEET-36 Cut-over: Media-Truth kommt jetzt aus benni_media_state (L1-Feeder,
     # B2-Gate-Fix) statt aus dem alten Toolbox-Monolith benni_media_context.
@@ -268,7 +300,6 @@ AREA_PREFILL: Final[dict[str, list[str]]] = {
 CONF_APPLY_ENABLED: Final = "apply_enabled"
 CONF_STARTUP_BLOCK_SECONDS: Final = "startup_block_seconds"
 CONF_CROSSFADE_SECONDS: Final = "crossfade_seconds"
-CONF_SCENE_TRANSITION_SECONDS: Final = "scene_transition_seconds"
 CONF_SCENE_INTERVAL_SECONDS: Final = "scene_interval_seconds"
 CONF_LUX_THRESHOLDS: Final = "lux_thresholds"          # dict season -> {dark, bright}
 CONF_BRIGHTNESS: Final = "brightness_profile"          # dict mode/phase -> 0..255
@@ -287,7 +318,6 @@ DEFAULT_CROSSFADE_SECONDS: Final = 30
 # Reine Brightness-Änderung (selber Look) → kurzer Fade statt Look-Default-Crossfade,
 # damit Helligkeits-Edits im UX sofort sichtbar werden (nicht erst nach 60 s).
 BRIGHTNESS_CHANGE_TRANSITION_SECONDS: Final = 2
-DEFAULT_SCENE_TRANSITION_SECONDS: Final = 300
 DEFAULT_SCENE_INTERVAL_SECONDS: Final = 300
 
 # TMC-Latch (R2): „war es heute schon hell?"
@@ -319,8 +349,11 @@ DEFAULT_BRIGHTNESS: Final[dict[str, int]] = {
     PHASE_EARLY_MORNING: 255,
     PHASE_LATE_MORNING: 255,
     PHASE_FORENOON: 255,
+    PHASE_MIDDAY: 255,
     PHASE_AFTERNOON: 255,
+    PHASE_LATE_AFTERNOON: 220,
     PHASE_EARLY_EVENING: 220,
+    PHASE_EVENING: 220,
     PHASE_LATE_EVENING: 200,
     PHASE_EARLY_NIGHT: 150,
     PHASE_LATE_NIGHT: 100,
@@ -332,18 +365,12 @@ DEFAULT_BRIGHTNESS: Final[dict[str, int]] = {
 COLOR_TEMP_WORK_HOME: Final = 5000
 COLOR_TEMP_WAKING: Final = 6500
 
-# Feste Preset-Schlüssel für Sonderkontexte (Lastenheft §7.2).
-PRESET_PC_OVERWATCH: Final = "games_overwatch_2"
-PRESET_PC_HEARTHSTONE: Final = "games_hearthstone"
-PRESET_BEDROOM_BEDTIME: Final = "bedroom_bedtime"
-
 # Bereichs-Konstanten (R14–R17).
 HALLWAY_TIMER_SECONDS: Final = 120          # 2-Min-Auto-Off (R14)
 HALLWAY_OFF_REPEATS: Final = 3              # 3x Turn-Off mit Abstand (Zigbee)
 HALLWAY_OFF_REPEAT_DELAY: Final = 3         # Sekunden zwischen den Off-Befehlen
 HALLWAY_COLOR_TEMP: Final = 3000
 BATHROOM_TIMEOUT_SECONDS: Final = 3600       # 60-Min-Vergessensschutz (R15)
-BEDTIME_AWAKE_THRESHOLD_MINUTES: Final = 840  # 14h (R16)
 
 # Aqara Advanced Lighting — T1M RGB Ring (R17), getrennt von Scene Presets (KH-9).
 AQARA_DOMAIN: Final = "aqara_advanced_lighting"
@@ -369,7 +396,6 @@ UID_LUX_GATE: Final = "lux_gate"
 UID_DEBUG: Final = "living_room_debug"
 UID_APPLY_BLOCKED: Final = "living_room_apply_blocked"
 UID_RING_MODE: Final = "ring_mode"
-UID_BEDTIME_SIGNAL: Final = "bedroom_bedtime_signal"
 UID_MANUAL_OFF: Final = "manual_off_living_room"
 UID_APPLY_ENABLED: Final = "apply_enabled"
 

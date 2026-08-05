@@ -8,12 +8,16 @@ const DOMAIN = "benni_light_policy";
 
 export const PHASE_LABELS = {
   early_morning: "Früh-Morgen", late_morning: "Spät-Morgen", forenoon: "Vormittag",
-  afternoon: "Nachmittag", early_evening: "Früh-Abend", late_evening: "Spät-Abend",
+  midday: "Mittag", afternoon: "Nachmittag", late_afternoon: "Später Nachmittag",
+  evening: "Abend", early_evening: "Früh-Abend", late_evening: "Spät-Abend",
   early_night: "Früh-Nacht", late_night: "Spät-Nacht",
 };
 export const THEME_LABELS = {
   spring: "Frühling", summer: "Sommer", autumn: "Herbst", winter: "Winter",
   christmas: "Weihnachten", easter: "Ostern", halloween: "Halloween", carnival: "Karneval",
+  geburtstag: "Geburtstag",
+  silvester: "Silvester", pride: "Pride", advent_1: "1. Advent", advent_2: "2. Advent",
+  advent_3: "3. Advent", advent_4: "4. Advent", stpatricks: "St. Patrick's Day",
 };
 export const MODE_LABELS = {
   cinema: "Cinema", private_time: "Private Time", waking: "Wecklicht", work_home: "Work-Home",
@@ -25,6 +29,8 @@ export class Store {
     this.status = null;
     this.catalog = null;
     this.looks = [];
+    this.looks_status = "unavailable";
+    this.looks_error = null;
     this._lookBySlug = new Map();
     this._lookByName = new Map();
   }
@@ -35,14 +41,25 @@ export class Store {
   }
 
   async refresh() {
+    this.looks_status = "loading";
+    this.looks_error = null;
     const [status, catalog, looksRes] = await Promise.all([
       this._ws({ type: `${DOMAIN}/get_status` }).catch((e) => ({ _error: String(e.message || e) })),
       this._ws({ type: `${DOMAIN}/get_look_map` }).catch((e) => ({ _error: String(e.message || e) })),
-      this._ws({ type: "benni_scene_presets/list_looks" }).catch(() => null),
+      this._ws({ type: "benni_scene_presets/list_looks" }).catch((e) => ({
+        _error: String(e.message || e),
+      })),
     ]);
     this.status = status;
     this.catalog = catalog;
-    this.looks = (looksRes && looksRes.looks) || [];
+    if (looksRes && !looksRes._error && Array.isArray(looksRes.looks)) {
+      this.looks = looksRes.looks;
+      this.looks_status = "ready";
+    } else {
+      this.looks = [];
+      this.looks_status = "unavailable";
+      this.looks_error = (looksRes && looksRes._error) || "invalid list_looks response";
+    }
     this._indexLooks();
     return this;
   }
@@ -57,8 +74,10 @@ export class Store {
   }
 
   scenePresetsAvailable() {
-    return Array.isArray(this.looks);
+    return this.looks_status === "ready";
   }
+
+  scenePresetsStatus() { return this.looks_status; }
 
   // ----- Look-Map -----
   get lookMap() { return (this.catalog && this.catalog.look_map) || {}; }

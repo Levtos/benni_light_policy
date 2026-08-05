@@ -100,8 +100,6 @@ export function render(el, ctx) {
           <span class="v">${chip(gate.lux_gate_on ? "ok" : "info", gate.lux_gate_on ? "offen" : "zu (hell genug)")}</span></div>
         <div class="kv"><span class="k">Manual-Off<small>per Switch Manager</small></span>
           <span class="v">${chip(s.manual_off ? "warn" : "ok", s.manual_off ? "aktiv" : "inaktiv")}</span></div>
-        <div class="kv"><span class="k">Bettgeh-Signal (R16)</span>
-          <span class="v">${chip(s.bedtime_active ? "info" : "ok", s.bedtime_active ? "aktiv" : "inaktiv")}</span></div>
         <div class="row-actions">
           <button class="btn primary" id="saveApply">Apply speichern</button>
         </div>

@@ -3,7 +3,7 @@ import lp_migration as M
 
 
 def test_config_entry_version_triggers_fleet54_migration() -> None:
-    assert C.CONFIG_ENTRY_VERSION == 4
+    assert C.CONFIG_ENTRY_VERSION == 5
 
 
 def test_migrate_legacy_entity_ids_updates_data_and_options() -> None:
@@ -19,7 +19,7 @@ def test_migrate_legacy_entity_ids_updates_data_and_options() -> None:
     new_data, new_options, changed = M.migrate_legacy_entity_ids(data, options)
 
     assert changed is True
-    assert new_data[C.CONF_CALENDAR_THEME] == "sensor.benni_combined_context_day_context"
+    assert new_data[C.CONF_CALENDAR_THEME] == "sensor.benni_core_state_day_context"
     assert (
         new_data[C.CONF_ENTERTAINMENT_STABLE]
         == "binary_sensor.benni_media_state_entertainment_active"
@@ -31,7 +31,7 @@ def test_migrate_legacy_entity_ids_updates_data_and_options() -> None:
 
 
 def test_migrate_legacy_entity_ids_noops_when_clean() -> None:
-    data = {C.CONF_CALENDAR_THEME: "sensor.benni_combined_context_day_context"}
+    data = {C.CONF_CALENDAR_THEME: "sensor.benni_core_state_day_context"}
     options = {
         C.CONF_LUX: "sensor.benni_device_garden_lux",
         C.CONF_SEASON: "sensor.benni_device_weather_season_meteorological",
@@ -44,15 +44,51 @@ def test_migrate_legacy_entity_ids_noops_when_clean() -> None:
     assert new_options == options
 
 
-def test_migrate_fleet54_intermediate_core_state_day_context() -> None:
+def test_canonical_core_state_day_context_is_not_rewritten() -> None:
     data = {C.CONF_CALENDAR_THEME: "sensor.benni_core_state_day_context"}
     options: dict[str, str] = {}
 
     new_data, new_options, changed = M.migrate_legacy_entity_ids(data, options)
 
-    assert changed is True
-    assert new_data[C.CONF_CALENDAR_THEME] == "sensor.benni_combined_context_day_context"
+    assert changed is False
+    assert new_data == data
     assert new_options == {}
+
+
+def test_all_canonical_core_and_media_prefills_are_stable() -> None:
+    data = {
+        key: entity
+        for key, entity in C.ENTITY_PREFILL.items()
+        if key in M.MIGRATED_ENTITY_KEYS
+    }
+    options: dict[str, str] = {}
+
+    new_data, new_options, changed = M.migrate_legacy_entity_ids(data, options)
+
+    assert changed is False
+    assert new_data == data
+    assert new_options == options
+
+
+def test_legacy_activity_presence_and_media_context_migrate_to_current_contract() -> None:
+    data = {
+        C.CONF_ACTIVITY_STATE: "sensor.benni_combined_context_activity_state",
+        C.CONF_PRESENCE_PERSONAL: "sensor.benni_combined_context_presence_personal",
+        C.CONF_PRESENCE_HOUSEHOLD: "sensor.benni_combined_context_presence_household",
+        C.CONF_PRESENCE_TRANSITION: "sensor.benni_combined_context_presence_transition",
+        C.CONF_MEDIA_CONTEXT: "sensor.benni_media_context",
+        C.CONF_MEDIA_DEVICE: "sensor.benni_media_device",
+    }
+
+    new_data, _, changed = M.migrate_legacy_entity_ids(data, {})
+
+    assert changed is True
+    assert new_data[C.CONF_ACTIVITY_STATE] == C.ENTITY_PREFILL[C.CONF_ACTIVITY_STATE]
+    assert new_data[C.CONF_PRESENCE_PERSONAL] == C.ENTITY_PREFILL[C.CONF_PRESENCE_PERSONAL]
+    assert new_data[C.CONF_PRESENCE_HOUSEHOLD] == C.ENTITY_PREFILL[C.CONF_PRESENCE_HOUSEHOLD]
+    assert new_data[C.CONF_PRESENCE_TRANSITION] == C.ENTITY_PREFILL[C.CONF_PRESENCE_TRANSITION]
+    assert new_data[C.CONF_MEDIA_CONTEXT] == C.ENTITY_PREFILL[C.CONF_MEDIA_CONTEXT]
+    assert new_data[C.CONF_MEDIA_DEVICE] == C.ENTITY_PREFILL[C.CONF_MEDIA_DEVICE]
 
 
 # -------------------------------------------- RGB-Ring im Hard-Off-Scope (GROUP_ALL)

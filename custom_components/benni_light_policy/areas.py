@@ -78,6 +78,7 @@ class HallwayController(_AreaBase):
         super().__init__(coord, data)
         self._timer_unsub: CALLBACK_TYPE | None = None
         self._off_task: asyncio.Task | None = None
+        self._activate_task: asyncio.Task | None = None
 
     def start(self) -> None:
         light = self.opt(CONF_HALLWAY_LIGHT)
@@ -95,7 +96,9 @@ class HallwayController(_AreaBase):
             return
         if not self.apply_enabled or not self.coord.lux_gate_on():
             return
-        self.hass.async_create_task(self._activate())
+        if self._activate_task and not self._activate_task.done():
+            self._activate_task.cancel()
+        self._activate_task = self.hass.async_create_task(self._activate())
 
     async def _activate(self) -> None:
         light = self.opt(CONF_HALLWAY_LIGHT)
@@ -140,6 +143,8 @@ class HallwayController(_AreaBase):
             self._timer_unsub = None
         if self._off_task and not self._off_task.done():
             self._off_task.cancel()
+        if self._activate_task and not self._activate_task.done():
+            self._activate_task.cancel()
 
 
 class BathroomController(_AreaBase):
@@ -148,6 +153,7 @@ class BathroomController(_AreaBase):
     def __init__(self, coord, data: dict) -> None:
         super().__init__(coord, data)
         self._timer_unsub: CALLBACK_TYPE | None = None
+        self._off_task: asyncio.Task | None = None
 
     def start(self) -> None:
         light = self.opt(CONF_BATHROOM_LIGHT)
@@ -160,6 +166,9 @@ class BathroomController(_AreaBase):
         self._unsub.append(
             async_track_state_change_event(self.hass, watch, self._on_change)
         )
+        current = self.hass.states.get(light)
+        if current and _is_on(current.state):
+            self._start_timer()
 
     @callback
     def _on_change(self, event: Event) -> None:
@@ -188,15 +197,31 @@ class BathroomController(_AreaBase):
             if self.apply_enabled:
                 # Domain-agnostisch: Bad-Licht kann light.* ODER switch.*
                 # (z.B. Shelly) sein. homeassistant.turn_off dispatcht korrekt.
-                self.hass.async_create_task(
-                    self.hass.services.async_call(
-                        "homeassistant", "turn_off",
-                        {"entity_id": self.opt(CONF_BATHROOM_LIGHT)}, blocking=False,
-                    )
-                )
+                if self._off_task and not self._off_task.done():
+                    self._off_task.cancel()
+                self._off_task = self.hass.async_create_task(self._turn_off())
 
-        timeout = int(self.opt(CONF_BATHROOM_TIMEOUT) or BATHROOM_TIMEOUT_SECONDS)
+        timeout = self._timeout_seconds()
         self._timer_unsub = async_call_later(self.hass, timeout, _fire)
+
+    def _timeout_seconds(self) -> int:
+        raw = self.opt(CONF_BATHROOM_TIMEOUT)
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = BATHROOM_TIMEOUT_SECONDS
+        return max(1, min(86400, value))
+
+    async def _turn_off(self) -> None:
+        try:
+            await self.hass.services.async_call(
+                "homeassistant", "turn_off",
+                {"entity_id": self.opt(CONF_BATHROOM_LIGHT)}, blocking=False,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:  # noqa: BLE001 - controller remains alive
+            _LOGGER.warning("bathroom light auto-off failed: %s", err)
 
     def _cancel_timer(self) -> None:
         if self._timer_unsub is not None:
@@ -206,6 +231,8 @@ class BathroomController(_AreaBase):
     def stop(self) -> None:
         super().stop()
         self._cancel_timer()
+        if self._off_task and not self._off_task.done():
+            self._off_task.cancel()
 
 
 class RingController(_AreaBase):
@@ -214,6 +241,10 @@ class RingController(_AreaBase):
     Preset-Namen pro Activity State sind OQ-1 (nach Inbetriebnahme) — solange keine
     Map konfiguriert ist, wird nur der ring_mode-Sensor gepflegt (kein Service-Call).
     """
+
+    def __init__(self, coord, data: dict) -> None:
+        super().__init__(coord, data)
+        self._effect_task: asyncio.Task | None = None
 
     def start(self) -> None:
         # Activity-Quelle: Subentry-Override, sonst die des Hubs.
@@ -224,29 +255,52 @@ class RingController(_AreaBase):
         self._unsub.append(
             async_track_state_change_event(self.hass, [activity], self._on_activity)
         )
+        current = self.hass.states.get(activity)
+        if current is not None:
+            self._apply_activity_state(current.state)
 
     @callback
     def _on_activity(self, event: Event) -> None:
         new = event.data.get("new_state")
         if new is None:
             return
-        self.coord.set_ring_mode(new.state)
+        self._apply_activity_state(new.state)
+
+    def _apply_activity_state(self, state: str | None) -> None:
+        if state in (None, "unknown", "unavailable"):
+            return
+        self.coord.set_ring_mode(state)
         targets = self.opt(CONF_RING_TARGETS) or []
         if isinstance(targets, str):
             targets = [targets]
         # Minihub-Mapping (activity_state-Wert → Aqara-Effekt-Name).
         # Backward-Compat: alter CONF_RING_PRESET_MAP wird noch akzeptiert.
         preset_map = self.opt(CONF_MAPPINGS) or self.opt(CONF_RING_PRESET_MAP) or {}
-        effect = preset_map.get(new.state)
-        if not (self.apply_enabled and targets and effect):
+        if not isinstance(preset_map, dict):
             return
+        effect = preset_map.get(state)
+        if not (
+            self.apply_enabled
+            and targets
+            and isinstance(effect, str)
+            and effect.strip()
+        ):
+            return
+        effect = effect.strip()
         # Simultan auf ALLE Ringe (z.B. Wohnzimmer + Küche) denselben Effekt.
-        self.hass.async_create_task(
+        if self._effect_task and not self._effect_task.done():
+            self._effect_task.cancel()
+        self._effect_task = self.hass.async_create_task(
             self.hass.services.async_call(
                 AQARA_DOMAIN, AQARA_SERVICE_SET_EFFECT,
                 {"entity_id": list(targets), "effect": effect}, blocking=False,
             )
         )
+
+    def stop(self) -> None:
+        super().stop()
+        if self._effect_task and not self._effect_task.done():
+            self._effect_task.cancel()
 
 
 _CONTROLLER_BY_TYPE = {

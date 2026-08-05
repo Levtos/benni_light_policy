@@ -70,7 +70,6 @@ from .const import (
     CONF_MEDIA_DEVICE,
     CONF_SOURCE_ID,
     CONF_SOURCE_PRIORITY,
-    CONF_TRIGGER_VALUE,
     CONF_WAKE_TEARDOWN_AREAS,
     CONF_WAKE_UP_TARGETS,
     CONF_WEATHER,
@@ -80,12 +79,9 @@ from .const import (
     DEFAULT_APPLY_ENABLED,
     DEFAULT_BRIGHTNESS,
     DEFAULT_CROSSFADE_SECONDS,
-    DEFAULT_LUX_THRESHOLDS,
     DEFAULT_SCENE_INTERVAL_SECONDS,
     DEFAULT_STARTUP_BLOCK_SECONDS,
-    DAY_PHASES,
     DOMAIN,
-    SEASON_WINTER,
     GROUP_ALL,
     GROUP_CEILING,
     GROUP_MAIN,
@@ -93,6 +89,7 @@ from .const import (
     POLICY_THEMES,
     POLICY_FIXED_MODES,
     PRESENCE_TRANSITION_COMING_HOME,
+    SUPPORTED_DAY_PHASES,
     SCENE_PRESETS_DOMAIN,
     SUBENTRY_GAMING,
     SUBENTRY_MUSIC,
@@ -107,7 +104,7 @@ from .const import (
     SP_ATTR_TRANSITION,
     BRIGHTNESS_CHANGE_TRANSITION_SECONDS,
 )
-from .policy import APPLY_CCT, APPLY_OFF, APPLY_SCENE
+from .policy import APPLY_CCT, APPLY_OFF
 from .storage import make_store
 
 _LOGGER = logging.getLogger(__name__)
@@ -128,6 +125,21 @@ def _float_or_none(s: str | None) -> float | None:
         return float(s)
     except (TypeError, ValueError):
         return None
+
+
+def _bounded_int(
+    raw: Any,
+    default: int,
+    *,
+    minimum: int = 0,
+    maximum: int = 86400,
+) -> int:
+    """Read a legacy option without allowing malformed values to break evaluation."""
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(maximum, value))
 
 
 class LightPolicyCoordinator:
@@ -169,6 +181,10 @@ class LightPolicyCoordinator:
         self._last_commanded_entities: list[str] = []
         self._last_apply_ts = 0.0
         self._apply_task: asyncio.Task | None = None
+        self._evaluation_task: asyncio.Task | None = None
+        self._evaluation_pending = False
+        self._evaluation_lock = asyncio.Lock()
+        self._stopping = False
 
         self._areas: list = []
         self._ring_mode: str | None = None
@@ -188,15 +204,24 @@ class LightPolicyCoordinator:
 
     @property
     def startup_block_seconds(self) -> int:
-        return int(self._opt(CONF_STARTUP_BLOCK_SECONDS, DEFAULT_STARTUP_BLOCK_SECONDS))
+        return _bounded_int(
+            self._opt(CONF_STARTUP_BLOCK_SECONDS, DEFAULT_STARTUP_BLOCK_SECONDS),
+            DEFAULT_STARTUP_BLOCK_SECONDS,
+        )
 
     @property
     def crossfade_seconds(self) -> int:
-        return int(self._opt(CONF_CROSSFADE_SECONDS, DEFAULT_CROSSFADE_SECONDS))
+        return _bounded_int(
+            self._opt(CONF_CROSSFADE_SECONDS, DEFAULT_CROSSFADE_SECONDS),
+            DEFAULT_CROSSFADE_SECONDS,
+        )
 
     @property
     def scene_interval_seconds(self) -> int:
-        return int(self._opt(CONF_SCENE_INTERVAL_SECONDS, DEFAULT_SCENE_INTERVAL_SECONDS))
+        return _bounded_int(
+            self._opt(CONF_SCENE_INTERVAL_SECONDS, DEFAULT_SCENE_INTERVAL_SECONDS),
+            DEFAULT_SCENE_INTERVAL_SECONDS,
+        )
 
     @property
     def manual_off_active(self) -> bool:
@@ -247,7 +272,7 @@ class LightPolicyCoordinator:
             add(self.resolve_look_ref(key))
 
         for theme in (*POLICY_THEMES, *self.custom_themes):
-            for phase in DAY_PHASES:
+            for phase in SUPPORTED_DAY_PHASES:
                 add(self.resolve_look_ref(f"{theme}_{phase}"))
 
         for key in self.look_map:
@@ -287,11 +312,17 @@ class LightPolicyCoordinator:
     def _startup_ready(self) -> bool:
         if not self._ha_started:
             return False
-        return (time.monotonic() - self._started_at) >= self.startup_block_seconds
+        if (time.monotonic() - self._started_at) < self.startup_block_seconds:
+            return False
+        system_ready_entity = self._opt(CONF_SYSTEM_READY)
+        if not system_ready_entity:
+            return True
+        return _bool_state(self._read(CONF_SYSTEM_READY)) is True
 
     # ----- lifecycle -----
     @callback
     def async_start(self) -> None:
+        self._stopping = False
         if async_at_started is not None:
             self._unsub.append(async_at_started(self.hass, self._on_started))
         elif self.hass.is_running:
@@ -344,20 +375,53 @@ class LightPolicyCoordinator:
         self._areas = []
         if self._apply_task and not self._apply_task.done():
             self._apply_task.cancel()
+        self._stopping = True
+        if self._evaluation_task and not self._evaluation_task.done():
+            self._evaluation_task.cancel()
+        self._evaluation_pending = False
 
     @callback
     def _on_started(self, _event) -> None:
         self._ha_started = True
         self._started_at = time.monotonic()
-        self.hass.async_create_task(self.async_evaluate())
+        self._schedule_evaluate()
 
     @callback
     def _on_interval(self, _now) -> None:
-        self.hass.async_create_task(self.async_evaluate())
+        self._schedule_evaluate()
 
     @callback
     def _on_state_change(self, _event: Event) -> None:
-        self.hass.async_create_task(self.async_evaluate())
+        self._schedule_evaluate()
+
+    def _schedule_evaluate(self) -> None:
+        """Coalesce event bursts into serialized, tracked evaluations."""
+        if self._stopping:
+            return
+        if self._evaluation_task and not self._evaluation_task.done():
+            self._evaluation_pending = True
+            return
+        self._evaluation_pending = False
+        self._evaluation_task = self.hass.async_create_task(
+            self._run_scheduled_evaluations()
+        )
+
+    async def _run_scheduled_evaluations(self) -> None:
+        current = asyncio.current_task()
+        try:
+            while not self._stopping:
+                self._evaluation_pending = False
+                try:
+                    await self.async_evaluate()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    _LOGGER.exception("light_policy: scheduled evaluation failed")
+                if not self._evaluation_pending:
+                    break
+        finally:
+            if self._evaluation_task is current:
+                self._evaluation_task = None
 
     # ----- persistence -----
     async def async_load(self) -> None:
@@ -456,6 +520,11 @@ class LightPolicyCoordinator:
         return policy.weather_darkness(ctx.lux, baseline, ctx.weather, ctx.master_phase)
 
     async def async_evaluate(self) -> policy.Plan:
+        """Serialize direct service calls and scheduled state evaluations."""
+        async with self._evaluation_lock:
+            return await self._async_evaluate()
+
+    async def _async_evaluate(self) -> policy.Plan:
         ctx = self.build_context()
         self._update_tmc(ctx)
         weather_dark = self._weather_dark(ctx)
@@ -494,6 +563,9 @@ class LightPolicyCoordinator:
             brightness_profile=self._opt(CONF_BRIGHTNESS),
             extra_policies=self._build_extra_policies(),
         )
+
+        if self._stopping:
+            return plan
 
         # Re-apply is keyed on the last *applied* hash, not the last *decided*
         # plan. Otherwise a plan that was decided but blocked (startup gate,
@@ -563,11 +635,18 @@ class LightPolicyCoordinator:
                 continue
             value = self._read_entity(d.get(CONF_CLASSIFIER_ENTITY))
             if sub.subentry_type == SUBENTRY_GAMING:
-                source_id = (d.get(CONF_SOURCE_ID) or "").strip().lower()
+                raw_source_id = d.get(CONF_SOURCE_ID)
+                source_id = (
+                    raw_source_id.strip().lower()
+                    if isinstance(raw_source_id, str)
+                    else ""
+                )
                 if not source_id:
                     continue
-                priority = int(d.get(CONF_SOURCE_PRIORITY)
-                               or GAMING_DEFAULT_PRIORITY.get(source_id, policy.PRIO_GAMING))
+                priority = policy.resolve_priority(
+                    d.get(CONF_SOURCE_PRIORITY),
+                    GAMING_DEFAULT_PRIORITY.get(source_id, policy.PRIO_GAMING),
+                )
                 out.append(policy.make_gaming_policy(
                     source_id, value, mappings, priority=priority,
                 ))
@@ -835,11 +914,11 @@ class LightPolicyCoordinator:
         allowed = set(DEFAULT_BRIGHTNESS) | {
             f"{theme}_{phase}"
             for theme in (*POLICY_THEMES, *self.custom_themes)
-            for phase in DAY_PHASES
+            for phase in SUPPORTED_DAY_PHASES
         }
         # Existing look-map themes from the frontend may include built-in themes too.
         for key in self.look_map:
-            if key.endswith(tuple(DAY_PHASES)):
+            if key.endswith(tuple(SUPPORTED_DAY_PHASES)):
                 allowed.add(key)
 
         cleaned: dict[str, int] = {}
@@ -901,8 +980,10 @@ class LightPolicyCoordinator:
         return self.brightness_profile().get(key) if key else None
 
     def brightness_profile(self) -> dict[str, int]:
-        raw = self._opt(CONF_BRIGHTNESS) or {}
-        return {**DEFAULT_BRIGHTNESS, **(raw if isinstance(raw, dict) else {})}
+        return {
+            **DEFAULT_BRIGHTNESS,
+            **policy.normalize_brightness_profile(self._opt(CONF_BRIGHTNESS)),
+        }
 
     def lux_gate_on(self) -> bool:
         return bool(self._prev_lux_gate)
@@ -923,8 +1004,8 @@ class LightPolicyCoordinator:
 
     def gate_internals(self) -> dict[str, Any]:
         season = self._read(CONF_SEASON)
-        thr = self._opt(CONF_LUX_THRESHOLDS) or DEFAULT_LUX_THRESHOLDS
-        dark, bright = thr.get(season or SEASON_WINTER, thr[SEASON_WINTER])
+        thresholds = policy.normalize_lux_thresholds(self._opt(CONF_LUX_THRESHOLDS))
+        dark, bright = thresholds.get(season, thresholds["winter"])
         return {
             "lux_gate_on": bool(self._prev_lux_gate),
             "tmc_set": self._tmc_set,
