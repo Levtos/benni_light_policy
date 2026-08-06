@@ -3,7 +3,7 @@ import lp_migration as M
 
 
 def test_config_entry_version_triggers_fleet54_migration() -> None:
-    assert C.CONFIG_ENTRY_VERSION == 6
+    assert C.CONFIG_ENTRY_VERSION == 7
 
 
 def test_migrate_legacy_entity_ids_updates_data_and_options() -> None:
@@ -63,6 +63,18 @@ def test_startup_gate_ids_migrate_in_data_and_options_without_touching_other_val
     assert new_options[C.CONF_APPLY_ENABLED] is False
     assert data[C.CONF_SYSTEM_READY] == "binary_sensor.system_apply_ready"
     assert options[C.CONF_SYSTEM_READY] == "binary_sensor.system_benni_context_ready"
+
+
+def test_live_system_prefixed_core_state_gate_migrates_to_the_clean_contract() -> None:
+    data = {
+        C.CONF_SYSTEM_READY: "binary_sensor.system_benni_core_state_apply_ready",
+    }
+
+    new_data, new_options, changed = M.migrate_legacy_entity_ids(data, {})
+
+    assert changed is True
+    assert new_data[C.CONF_SYSTEM_READY] == C.DEFAULT_SYSTEM_READY_ENTITY
+    assert new_options == {}
 
 
 def test_startup_gate_prefill_is_the_canonical_core_state_entity() -> None:
