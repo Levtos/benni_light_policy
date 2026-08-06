@@ -14,6 +14,7 @@ export function render(el, ctx) {
   }
   const themes = cat.themes || [];
   const phases = cat.phases || [];
+  const legacyPhases = cat.legacy_phases || [];
   const looksOk = store.scenePresetsAvailable();
   const bri = (store.status && store.status.brightness_profile) || {};
 
@@ -51,7 +52,8 @@ export function render(el, ctx) {
       <table><thead>${head}</thead><tbody>${body}</tbody></table>
       <p class="muted" style="font-size:12px;margin-top:10px">
         Mehrere Zellen dürfen denselben Look nutzen. „Fallback" heißt: kein Mapping gesetzt — der
-        Key-Name wird direkt als Look-Ref versucht.</p>
+        Key-Name wird direkt als Look-Ref versucht.${legacyPhases.length ? ` Legacy-Kompatibilitätsphasen
+        bleiben außerhalb der Primärmatrix erhalten: ${esc(legacyPhases.join(", "))}.` : ""}</p>
     </div>`;
 
   const applyLook = async (key, value) => {

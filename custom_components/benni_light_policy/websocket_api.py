@@ -16,6 +16,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CANONICAL_MATRIX_PHASES,
     CONF_ACTIVITY_STATE,
     CONF_BIO_STATE,
     CONF_CALENDAR_THEME,
@@ -36,6 +37,7 @@ from .const import (
     CONF_WEATHER,
     DATA_COORDINATOR,
     DOMAIN,
+    LEGACY_MATRIX_PHASES,
     POLICY_FIXED_MODES,
     POLICY_THEMES,
     SUBENTRY_GAMING,
@@ -49,6 +51,7 @@ from .const import (
     WS_SET_CUSTOM_THEMES,
     WS_SET_LOOK_MAP,
     WS_SET_SUBENTRY_MAPPINGS,
+    matrix_keys,
 )
 
 # Foundation-Quell-Entities, deren Verfügbarkeit den "System bereit"-Status speist.
@@ -75,15 +78,6 @@ def _coordinator(hass: HomeAssistant):
         if coord is not None:
             return coord
     return None
-
-
-def matrix_keys(themes: list[str] | tuple[str, ...] | None = None) -> list[str]:
-    """Alle Tagesphasen-Matrix-Keys (theme_phase)."""
-    return [
-        f"{theme}_{phase}"
-        for theme in (themes or POLICY_THEMES)
-        for phase in SUPPORTED_DAY_PHASES
-    ]
 
 
 def _entity_ready(hass: HomeAssistant, eid: str | None) -> bool:
@@ -176,8 +170,14 @@ def _catalog(coord) -> dict[str, Any]:
         "fixed_modes": list(POLICY_FIXED_MODES),
         "themes": themes,
         "custom_themes": list(coord.custom_themes),
-        "phases": list(SUPPORTED_DAY_PHASES),
+        # The visible matrix is the canonical Core-State nine-phase contract.
+        "phases": list(CANONICAL_MATRIX_PHASES),
+        # Legacy-only phases remain explicit compatibility/diagnostic data.
+        "legacy_phases": list(LEGACY_MATRIX_PHASES),
         "matrix_keys": matrix_keys(themes),
+        "legacy_matrix_keys": matrix_keys(themes, LEGACY_MATRIX_PHASES),
+        "supported_phases": list(SUPPORTED_DAY_PHASES),
+        "supported_matrix_keys": matrix_keys(themes, SUPPORTED_DAY_PHASES),
         "subentry_rules": _subentry_rules(coord),
     }
 
