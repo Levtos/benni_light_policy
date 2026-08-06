@@ -78,6 +78,14 @@ CORE_DAY_PHASES: Final = (
 )
 SUPPORTED_DAY_PHASES: Final = tuple(dict.fromkeys((*CORE_DAY_PHASES, *LEGACY_DAY_PHASES)))
 
+# The primary matrix follows the Core-State contract. Legacy-only values stay
+# available for runtime/config compatibility but are not additional primary
+# matrix columns.
+CANONICAL_MATRIX_PHASES: Final = CORE_DAY_PHASES
+LEGACY_MATRIX_PHASES: Final = tuple(
+    phase for phase in LEGACY_DAY_PHASES if phase not in CANONICAL_MATRIX_PHASES
+)
+
 # Phasen, in denen Anwesenheitssimulation läuft (alte und neue Abend-/Nachtwerte).
 PRESENCE_SIM_PHASES: Final = frozenset(
     {
@@ -140,6 +148,20 @@ POLICY_EVENT_THEMES: Final = (
     "advent_1", "advent_2", "advent_3", "advent_4", "stpatricks",
 )
 POLICY_THEMES: Final = (*SEASONS, *POLICY_EVENT_THEMES)
+
+
+def matrix_keys(
+    themes: list[str] | tuple[str, ...] | None = None,
+    phases: list[str] | tuple[str, ...] | None = None,
+) -> list[str]:
+    """Return ordered Theme × Phase keys for the requested phase generation."""
+    return [
+        f"{theme}_{phase}"
+        for theme in (themes or POLICY_THEMES)
+        for phase in (phases if phases is not None else CANONICAL_MATRIX_PHASES)
+    ]
+
+
 # Feste Policy-Modi, die einen Look-Ref brauchen (keine Tagesphasen-Matrix).
 # `idle` = Hard-Off-Zustand: bekommt eine eigene Look-Map-Zuordnung (all_off-Look),
 # damit der Warden den Off-Zustand über die Look-Ebene durchsetzen kann. Der Apply
