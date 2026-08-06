@@ -14,9 +14,10 @@ values remain observable. The local `startup_block_seconds` option (default 15
 seconds) is a deliberate Light-Policy staging delay. It must never create or
 reset the Core-State 90-second process timer.
 
-Existing persisted `system_ready_entity` values for the two proven legacy
-consumer IDs `binary_sensor.system_apply_ready` and
-`binary_sensor.system_benni_context_ready` migrate to the canonical Core-State
-entity. Other legacy IDs are not guessed or rewritten. The old YAML entities
-remain a separate private-configuration cutover concern until all consumers
-have been inventoried and a rollback path is documented.
+Existing persisted `system_ready_entity` values for the three proven legacy
+consumer/registry IDs `binary_sensor.system_apply_ready`,
+`binary_sensor.system_benni_context_ready`, and the live-observed
+`binary_sensor.system_benni_core_state_apply_ready` migrate to the canonical
+Core-State entity. Other legacy IDs are not guessed or rewritten. The old YAML
+entities remain a separate private-configuration cutover concern until all
+consumers have been inventoried and a rollback path is documented.

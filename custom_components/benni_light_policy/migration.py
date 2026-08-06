@@ -56,8 +56,10 @@ LEGACY_ENTITY_REPLACEMENTS: dict[str, str] = {
     "binary_sensor.benni_entertainment_active": (
         "binary_sensor.benni_media_state_entertainment_active"
     ),
-    # Parent Issue #33: migrate only the two IDs proven as Light-Policy
-    # consumer candidates.  The YAML helper itself is not an alias owner.
+    # Parent Issue #33: migrate only IDs proven in the consumer/config inventory.
+    # The YAML helper itself is not an alias owner.  The third entry is the exact
+    # live Core-State registry path observed on 2026-08-06.
+    "binary_sensor.system_benni_core_state_apply_ready": "binary_sensor.benni_core_state_apply_ready",
     "binary_sensor.system_apply_ready": "binary_sensor.benni_core_state_apply_ready",
     "binary_sensor.system_benni_context_ready": "binary_sensor.benni_core_state_apply_ready",
 }

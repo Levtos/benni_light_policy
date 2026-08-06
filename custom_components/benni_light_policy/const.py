@@ -16,7 +16,7 @@ from typing import Final
 
 DOMAIN: Final[str] = "benni_light_policy"
 MODULE_ID: Final[str] = "light_policy"
-CONFIG_ENTRY_VERSION: Final[int] = 6
+CONFIG_ENTRY_VERSION: Final[int] = 7
 
 # Datenwurzel in hass.data[DOMAIN].
 DATA_COORDINATOR: Final[str] = "coordinator"
