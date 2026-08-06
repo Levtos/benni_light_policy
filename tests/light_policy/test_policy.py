@@ -258,6 +258,10 @@ def test_apply_disabled_blocks_without_changing_plan():
 
 def test_startup_block():
     p = _decide(_ctx(activity_state=C.ACTIVITY_WORK_HOME), startup_ready=False)
+    assert p.mode == C.MODE_WORK_HOME
+    assert p.preset_enum is not None
+    assert p.brightness is not None
+    assert p.lux_gate_on is True
     assert p.apply_allowed is False
     assert "startup_block" in p.blockers
 

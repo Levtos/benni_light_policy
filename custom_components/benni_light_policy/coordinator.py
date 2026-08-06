@@ -22,7 +22,8 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
@@ -38,6 +39,7 @@ from . import areas, policy
 from .const import (
     BIO_AWAKE,
     BIO_SLEEP,
+    BRIGHTNESS_CHANGE_TRANSITION_SECONDS,
     CONF_ACTIVITY_STATE,
     CONF_APPLY_ENABLED,
     CONF_BIO_STATE,
@@ -55,6 +57,9 @@ from .const import (
     CONF_LOOK_MAP,
     CONF_LUX,
     CONF_LUX_THRESHOLDS,
+    CONF_MAPPINGS,
+    CONF_MEDIA_CONTEXT,
+    CONF_MEDIA_DEVICE,
     CONF_OVERNIGHT_AWAY,
     CONF_PRESENCE_HOUSEHOLD,
     CONF_PRESENCE_PERSONAL,
@@ -62,47 +67,44 @@ from .const import (
     CONF_REQUIRE_BIRTHDAY,
     CONF_SCENE_INTERVAL_SECONDS,
     CONF_SEASON,
+    CONF_SOURCE_ID,
+    CONF_SOURCE_PRIORITY,
     CONF_STARTUP_BLOCK_SECONDS,
     CONF_SYSTEM_READY,
     CONF_TITLE_CLASSIFIER,
-    CONF_MAPPINGS,
-    CONF_MEDIA_CONTEXT,
-    CONF_MEDIA_DEVICE,
-    CONF_SOURCE_ID,
-    CONF_SOURCE_PRIORITY,
     CONF_WAKE_TEARDOWN_AREAS,
     CONF_WAKE_UP_TARGETS,
     CONF_WEATHER,
     DATA_SKIP_RELOAD_COUNT,
-    DEFAULT_WAKE_TEARDOWN_AREAS,
-    GAMING_DEFAULT_PRIORITY,
     DEFAULT_APPLY_ENABLED,
     DEFAULT_BRIGHTNESS,
     DEFAULT_CROSSFADE_SECONDS,
     DEFAULT_SCENE_INTERVAL_SECONDS,
     DEFAULT_STARTUP_BLOCK_SECONDS,
+    DEFAULT_SYSTEM_READY_ENTITY,
+    DEFAULT_WAKE_TEARDOWN_AREAS,
     DOMAIN,
+    GAMING_DEFAULT_PRIORITY,
     GROUP_ALL,
     GROUP_CEILING,
     GROUP_MAIN,
     PHASE_EARLY_MORNING,
-    POLICY_THEMES,
     POLICY_FIXED_MODES,
+    POLICY_THEMES,
     PRESENCE_TRANSITION_COMING_HOME,
-    SUPPORTED_DAY_PHASES,
     SCENE_PRESETS_DOMAIN,
+    SP_ATTR_BRIGHTNESS,
+    SP_ATTR_LOOK,
+    SP_ATTR_TRANSITION,
+    SP_SERVICE_APPLY_LOOK,
+    SP_SERVICE_STOP_LOOK,
     SUBENTRY_GAMING,
     SUBENTRY_MUSIC,
     SUBENTRY_WAKE_UP,
+    SUPPORTED_DAY_PHASES,
     TMC_FALLBACK_HOUR,
     TMC_TRIGGER_LUX,
     WEATHER_DARK_WINDOW_SECONDS,
-    SP_SERVICE_APPLY_LOOK,
-    SP_SERVICE_STOP_LOOK,
-    SP_ATTR_LOOK,
-    SP_ATTR_BRIGHTNESS,
-    SP_ATTR_TRANSITION,
-    BRIGHTNESS_CHANGE_TRANSITION_SECONDS,
 )
 from .policy import APPLY_CCT, APPLY_OFF
 from .storage import make_store
@@ -314,8 +316,17 @@ class LightPolicyCoordinator:
             return False
         if (time.monotonic() - self._started_at) < self.startup_block_seconds:
             return False
+
+        # The Core-State process gate is mandatory.  A missing/empty legacy
+        # option must never bypass it.  A separately configured entity is
+        # retained only as an additional consumer-local gate until its cutover
+        # is explicitly proven; the two known old IDs are migrated before setup.
+        central_state = self.hass.states.get(DEFAULT_SYSTEM_READY_ENTITY)
+        if central_state is None or _bool_state(central_state.state) is not True:
+            return False
+
         system_ready_entity = self._opt(CONF_SYSTEM_READY)
-        if not system_ready_entity:
+        if not system_ready_entity or system_ready_entity == DEFAULT_SYSTEM_READY_ENTITY:
             return True
         return _bool_state(self._read(CONF_SYSTEM_READY)) is True
 
@@ -346,6 +357,9 @@ class LightPolicyCoordinator:
             v = self._opt(key)
             if isinstance(v, str) and v:
                 watch.add(v)
+        # Always observe the mandatory process-wide gate, even for an older
+        # entry that has no persisted system_ready_entity value.
+        watch.add(DEFAULT_SYSTEM_READY_ENTITY)
         # Subentry-Quellen (Gaming/Musik-Classifier) mitbeobachten.
         for sub in self.entry.subentries.values():
             v = sub.data.get(CONF_CLASSIFIER_ENTITY)

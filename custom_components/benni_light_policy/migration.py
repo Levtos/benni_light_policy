@@ -17,6 +17,7 @@ from .const import (
     CONF_PRESENCE_PERSONAL,
     CONF_PRESENCE_TRANSITION,
     CONF_SEASON,
+    CONF_SYSTEM_READY,
 )
 
 # WZ-Deckenlicht = zwei light-Entities (weißes Panel + Aqara-RGB-Ring).
@@ -55,6 +56,10 @@ LEGACY_ENTITY_REPLACEMENTS: dict[str, str] = {
     "binary_sensor.benni_entertainment_active": (
         "binary_sensor.benni_media_state_entertainment_active"
     ),
+    # Parent Issue #33: migrate only the two IDs proven as Light-Policy
+    # consumer candidates.  The YAML helper itself is not an alias owner.
+    "binary_sensor.system_apply_ready": "binary_sensor.benni_core_state_apply_ready",
+    "binary_sensor.system_benni_context_ready": "binary_sensor.benni_core_state_apply_ready",
 }
 
 MIGRATED_ENTITY_KEYS: tuple[str, ...] = (
@@ -70,6 +75,7 @@ MIGRATED_ENTITY_KEYS: tuple[str, ...] = (
     CONF_PRESENCE_PERSONAL,
     CONF_PRESENCE_TRANSITION,
     CONF_SEASON,
+    CONF_SYSTEM_READY,
 )
 
 

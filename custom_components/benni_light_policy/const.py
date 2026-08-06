@@ -16,7 +16,7 @@ from typing import Final
 
 DOMAIN: Final[str] = "benni_light_policy"
 MODULE_ID: Final[str] = "light_policy"
-CONFIG_ENTRY_VERSION: Final[int] = 5
+CONFIG_ENTRY_VERSION: Final[int] = 6
 
 # Datenwurzel in hass.data[DOMAIN].
 DATA_COORDINATOR: Final[str] = "coordinator"
@@ -164,6 +164,7 @@ CONF_TITLE_CLASSIFIER: Final = "title_classifier_entity"
 CONF_ENTERTAINMENT_STABLE: Final = "entertainment_stable_entity"
 CONF_OVERNIGHT_AWAY: Final = "overnight_away_entity"
 CONF_SYSTEM_READY: Final = "system_ready_entity"
+DEFAULT_SYSTEM_READY_ENTITY: Final = "binary_sensor.benni_core_state_apply_ready"
 CONF_WEATHER: Final = "weather_entity"
 CONF_PRESENCE_TRANSITION: Final = "presence_transition_entity"
 # Spider-web-Konsum aus benni_media_state: welche Quelle ist aktiv (pc/ps5/…)
@@ -257,7 +258,10 @@ ENTITY_PREFILL: Final[dict[str, str]] = {
     CONF_ENTERTAINMENT_STABLE: "binary_sensor.benni_media_state_entertainment_active",
     CONF_MEDIA_DEVICE: "sensor.benni_media_state_media_device",
     CONF_MEDIA_CONTEXT: "sensor.benni_media_state_media_context",
-    CONF_SYSTEM_READY: "binary_sensor.system_benni_context_ready",
+    # Parent Issue #33: the process-wide lifecycle gate is owned by Core State.
+    # This remains a consumer binding only; Light Policy keeps its local
+    # startup_block_seconds staging delay separate from the global timer.
+    CONF_SYSTEM_READY: DEFAULT_SYSTEM_READY_ENTITY,
     CONF_SEASON: "sensor.benni_device_weather_season_meteorological",
 }
 
