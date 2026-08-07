@@ -129,7 +129,7 @@
           "data": {
             "name": "Name (e.g. “Gaming PC”)",
             "source_id": "Source ID (matches media_device: pc / ps5 / nintendo)",
-            "source_priority": "Priority (blank = source default; otherwise lower number wins)",
+            "source_priority": "Priority (blank = source default; lower wins; values below the Lux hard-off boundary are clamped to the Lux priority)",
             "classifier_entity": "Title classifier entity (enum 0/1/2/…)",
             "mapping_value_0": "Slot 1 · Enum value (e.g. 0)",
             "mapping_preset_0": "Slot 1 · Look slug/name",
