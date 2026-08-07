@@ -5,3 +5,5 @@ __pycache__/
 .venv/
 *.egg-info/
 .claude/settings.local.json
+frontend/node_modules/
+frontend/dist/

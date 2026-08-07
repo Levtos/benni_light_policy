@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# The static frontend bundle is a reproducible Vite artifact; keep review focus
+# on its typed Svelte sources while still shipping the bundle for HA.
+custom_components/benni_light_policy/frontend/app/main.js -diff
