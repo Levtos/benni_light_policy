@@ -560,6 +560,9 @@ def make_gaming_policy(
     kompatibel; `pc_active` bewusst ausgeschlossen — nur „PC an").
     Mapping classifier_value → Look-Ref (Name/Slug). Mehrere Quellen gleichzeitig:
     Konflikt wird über priority gelöst (PS5=9 < Nintendo=10 < Cinema=11 < PC=12).
+    Die effektive Gaming-Priorität kann den Lux-Hard-Off nicht überstimmen:
+    persistierte source_priority-Werte unter PRIO_IDLE_LUX werden auf diese
+    Grenze angehoben; Werte an oder über der Grenze behalten ihre Reihenfolge.
     """
 
     def _ev(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
@@ -587,7 +590,8 @@ def make_gaming_policy(
             reason=f"gaming:{source_id}: classifier={classifier_value} → {preset} @{phase}",
         )
 
-    return PolicyDef(f"gaming_{source_id}", priority, _ev)
+    effective_priority = max(PRIO_IDLE_LUX, priority)
+    return PolicyDef(f"gaming_{source_id}", effective_priority, _ev)
 
 
 def make_music_policy(

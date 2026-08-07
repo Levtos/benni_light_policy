@@ -125,11 +125,22 @@ def test_wake_modes_membership():
 
 # ---------------------------------------------------------------- decision chain
 def test_waking_overrides_everything():
-    p = _decide(_ctx(bio_state=C.BIO_WAKING, day_state="late_night"), lux_gate_on=False)
+    gaming = P.make_gaming_policy("pc", "1", {"1": "Hearthstone"}, priority=0)
+    p = _decide(
+        _ctx(
+            bio_state=C.BIO_WAKING,
+            activity_state=C.ACTIVITY_GAMING,
+            day_state="late_night",
+            media_device="pc",
+        ),
+        lux_gate_on=False,
+        extra_policies=[gaming],
+    )
     assert p.mode == C.MODE_WAKING
     assert p.apply_kind == P.APPLY_CCT
     assert p.color_temp == C.COLOR_TEMP_WAKING
     assert p.preset_enum == C.MODE_WAKING   # Look-Ref → Kelvin-Look "waking"
+    assert p.lux_gate_on is False
 
 
 def test_sleep_hard_off():
@@ -137,12 +148,67 @@ def test_sleep_hard_off():
     assert p.mode == C.MODE_IDLE
     assert p.apply_kind == P.APPLY_OFF
     assert p.brightness == 0
+    assert p.exclusive_off == [C.GROUP_ALL]
 
 
 def test_lux_gate_off_hard_off():
     p = _decide(_ctx(bio_state=C.BIO_AWAKE, activity_state=C.ACTIVITY_PRIVATE_TIME), lux_gate_on=False)
     assert p.mode == C.MODE_IDLE
     assert p.apply_kind == P.APPLY_OFF
+    assert p.exclusive_off == [C.GROUP_ALL]
+
+
+def test_gaming_source_priority_below_lux_cannot_beat_hard_off():
+    ctx = _ctx(
+        bio_state=C.BIO_AWAKE,
+        activity_state=C.ACTIVITY_GAMING,
+        day_state=C.PHASE_LATE_EVENING,
+        season=C.SEASON_SUMMER,
+        media_device="pc",
+    )
+    for priority in (0, 1, 2):
+        gaming = P.make_gaming_policy("pc", "1", {"1": "Hearthstone"}, priority=priority)
+        p = _decide(ctx, lux_gate_on=False, extra_policies=[gaming])
+        assert p.mode == C.MODE_IDLE
+        assert p.apply_kind == P.APPLY_OFF
+        assert p.exclusive_off == [C.GROUP_ALL]
+        assert p.lux_gate_on is False
+
+
+def test_gaming_source_priority_zero_still_fires_when_lux_allows_light():
+    gaming = P.make_gaming_policy("pc", "1", {"1": "Hearthstone"}, priority=0)
+    p = _decide(
+        _ctx(
+            activity_state=C.ACTIVITY_GAMING,
+            day_state=C.PHASE_LATE_EVENING,
+            season=C.SEASON_SUMMER,
+            media_device="pc",
+        ),
+        lux_gate_on=True,
+        extra_policies=[gaming],
+    )
+    assert gaming.priority == P.PRIO_IDLE_LUX
+    assert p.mode == "gaming:pc:1"
+    assert p.preset_enum == "Hearthstone"
+    assert p.apply_kind == P.APPLY_SCENE
+    assert p.lux_gate_on is True
+
+
+def test_sleep_hard_off_remains_above_gaming_priority():
+    gaming = P.make_gaming_policy("pc", "1", {"1": "Hearthstone"}, priority=0)
+    p = _decide(
+        _ctx(
+            bio_state=C.BIO_SLEEP,
+            activity_state=C.ACTIVITY_GAMING,
+            day_state=C.PHASE_LATE_EVENING,
+            media_device="pc",
+        ),
+        lux_gate_on=True,
+        extra_policies=[gaming],
+    )
+    assert p.mode == C.MODE_IDLE
+    assert p.apply_kind == P.APPLY_OFF
+    assert p.exclusive_off == [C.GROUP_ALL]
 
 
 def test_hard_off_carries_idle_look_key():
