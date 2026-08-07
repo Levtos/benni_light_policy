@@ -1,0 +1,31 @@
+import { defineConfig } from "vite";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
+import tailwindcss from "@tailwindcss/vite";
+
+export default defineConfig({
+  plugins: [
+    svelte({
+      compilerOptions: {
+        css: "injected",
+      },
+    }),
+    tailwindcss(),
+  ],
+  base: "./",
+  build: {
+    outDir: "../custom_components/benni_light_policy/frontend/app",
+    emptyOutDir: true,
+    assetsDir: "assets",
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        entryFileNames: "main.js",
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]",
+      },
+    },
+  },
+  server: {
+    port: 4174,
+  },
+});

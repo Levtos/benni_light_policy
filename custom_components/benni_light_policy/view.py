@@ -1,8 +1,8 @@
 """Panel-Registrierung für das Light-Policy-Dashboard.
 
-Liefert das modulare Vanilla-Web-Components-Frontend unter `frontend/app/` als
-statisches Verzeichnis aus (ES-Module importieren sich gegenseitig) und registriert
-ein Custom-Panel in der HA-Sidebar.
+Liefert das gebaute Svelte-5-Modul unter `frontend/app/` als statisches
+Verzeichnis aus und registriert das bestehende `blp-app`-Custom-Panel in der
+HA-Sidebar. Der Host bleibt für Verbindung, Authentifizierung und Locale zuständig.
 """
 from __future__ import annotations
 
