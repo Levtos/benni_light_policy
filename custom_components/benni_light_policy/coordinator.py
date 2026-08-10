@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -107,6 +107,7 @@ from .const import (
     WEATHER_DARK_WINDOW_SECONDS,
 )
 from .policy import APPLY_CCT, APPLY_OFF
+from .startup_recovery import LuxSample, StartupRecoveryState, classify_lux
 from .storage import make_store
 
 _LOGGER = logging.getLogger(__name__)
@@ -118,15 +119,6 @@ def _bool_state(s: str | None) -> bool | None:
     if s is None or s in ("unknown", "unavailable"):
         return None
     return s.lower() in ("on", "true", "1", "home", "active", "playing")
-
-
-def _float_or_none(s: str | None) -> float | None:
-    if s in (None, "", "unknown", "unavailable"):
-        return None
-    try:
-        return float(s)
-    except (TypeError, ValueError):
-        return None
 
 
 def _bounded_int(
@@ -156,6 +148,9 @@ class LightPolicyCoordinator:
 
         self._started_at = time.monotonic()
         self._ha_started = False
+        self._ha_started_at: datetime | None = None
+        self._startup_recovery = StartupRecoveryState()
+        self._last_lux_sample = LuxSample(None, None, "not_started")
 
         self._prev_lux_gate: bool | None = None
         self._prev_bio: str | None = None
@@ -311,6 +306,46 @@ class LightPolicyCoordinator:
             self._last_applied_hash = None
         await self.async_evaluate()
 
+    @staticmethod
+    def _state_timestamp(state: Any) -> datetime | None:
+        """Use recorder-visible source reporting time with HA compatibility fallbacks."""
+        for attr in ("last_reported", "last_updated", "last_changed"):
+            value = getattr(state, attr, None)
+            if isinstance(value, datetime):
+                return dt_util.as_utc(value)
+        return None
+
+    def _core_startup_started_at(self) -> datetime | None:
+        """Read the lifecycle reference from the canonical Core-State contract."""
+        state = self.hass.states.get(DEFAULT_SYSTEM_READY_ENTITY)
+        if state is not None:
+            raw = state.attributes.get("startup_started_at")
+            if isinstance(raw, datetime):
+                return dt_util.as_utc(raw)
+            if isinstance(raw, str):
+                parsed = dt_util.parse_datetime(raw)
+                if parsed is not None:
+                    return dt_util.as_utc(parsed)
+        return self._ha_started_at
+
+    def _lux_sample(self) -> LuxSample:
+        entity_id = self._opt(CONF_LUX)
+        startup_started_at = self._core_startup_started_at()
+        if not entity_id:
+            return LuxSample(None, None, "source_not_configured")
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return LuxSample(None, None, "source_missing")
+        return classify_lux(
+            state.state,
+            self._state_timestamp(state),
+            startup_started_at,
+        )
+
+    def _core_state_ready(self) -> bool:
+        state = self.hass.states.get(DEFAULT_SYSTEM_READY_ENTITY)
+        return state is not None and _bool_state(state.state) is True
+
     def _startup_ready(self) -> bool:
         if not self._ha_started:
             return False
@@ -321,8 +356,7 @@ class LightPolicyCoordinator:
         # option must never bypass it.  A separately configured entity is
         # retained only as an additional consumer-local gate until its cutover
         # is explicitly proven; the two known old IDs are migrated before setup.
-        central_state = self.hass.states.get(DEFAULT_SYSTEM_READY_ENTITY)
-        if central_state is None or _bool_state(central_state.state) is not True:
+        if not self._core_state_ready():
             return False
 
         system_ready_entity = self._opt(CONF_SYSTEM_READY)
@@ -396,8 +430,11 @@ class LightPolicyCoordinator:
 
     @callback
     def _on_started(self, _event) -> None:
+        if self._ha_started:
+            return
         self._ha_started = True
         self._started_at = time.monotonic()
+        self._ha_started_at = dt_util.utcnow()
         self._schedule_evaluate()
 
     @callback
@@ -485,7 +522,9 @@ class LightPolicyCoordinator:
         val = st.attributes.get(attr)
         return str(val) if val is not None else None
 
-    def build_context(self) -> policy.Context:
+    def build_context(self, *, lux_sample: LuxSample | None = None) -> policy.Context:
+        sample = lux_sample or self._lux_sample()
+        self._last_lux_sample = sample
         return policy.Context(
             bio_state=self._read(CONF_BIO_STATE),
             day_state=self._read(CONF_DAY_STATE),
@@ -502,7 +541,7 @@ class LightPolicyCoordinator:
             media_context=self._read(CONF_MEDIA_CONTEXT),
             overnight_away=_bool_state(self._read(CONF_OVERNIGHT_AWAY)),
             presence_transition=self._read(CONF_PRESENCE_TRANSITION),
-            lux=_float_or_none(self._read(CONF_LUX)),
+            lux=sample.value,
             weather=self._read(CONF_WEATHER),
             custom_themes=self.custom_themes,
         )
@@ -539,10 +578,21 @@ class LightPolicyCoordinator:
             return await self._async_evaluate()
 
     async def _async_evaluate(self) -> policy.Plan:
-        ctx = self.build_context()
+        lux_sample = self._lux_sample()
+        ctx = self.build_context(lux_sample=lux_sample)
         self._update_tmc(ctx)
         weather_dark = self._weather_dark(ctx)
         self._last_weather_dark = weather_dark
+
+        startup_ready = self._startup_ready()
+        recovery_crossed = self._startup_recovery.maybe_complete(
+            startup_ready=startup_ready,
+            lux_fresh=lux_sample.fresh,
+        )
+        if recovery_crossed:
+            # The first valid post-start Lux value is an explicit recovery edge,
+            # even when the resulting plan hash equals a prior persisted plan.
+            self._last_applied_hash = None
 
         gate = policy.lux_gate(
             ctx.lux, ctx.season, self._prev_lux_gate,
@@ -571,12 +621,18 @@ class LightPolicyCoordinator:
         plan = policy.decide(
             ctx,
             lux_gate_on=gate,
-            startup_ready=self._startup_ready(),
+            startup_ready=startup_ready,
             apply_enabled=self.apply_enabled,
             manual_off_active=self._manual_off,
             brightness_profile=self._opt(CONF_BRIGHTNESS),
             extra_policies=self._build_extra_policies(),
         )
+
+        if self._startup_recovery.pending:
+            # The plan remains fully visible, but stale/unknown/unavailable/
+            # fallback Lux must never authorize the first post-start Apply.
+            plan.blockers.append("startup_lux_block")
+            plan.apply_allowed = False
 
         if self._stopping:
             return plan
@@ -1025,6 +1081,15 @@ class LightPolicyCoordinator:
             "tmc_set": self._tmc_set,
             "weather_dark": self._last_weather_dark,
             "startup_ready": self._startup_ready(),
+            "startup_recovery_pending": self._startup_recovery.pending,
+            "startup_recovery_apply_count": self._startup_recovery.apply_count,
+            "lux_fresh": self._last_lux_sample.fresh,
+            "lux_sample_reason": self._last_lux_sample.reason,
+            "lux_sample_timestamp": (
+                self._last_lux_sample.timestamp.isoformat()
+                if self._last_lux_sample.timestamp is not None
+                else None
+            ),
             "season": season,
             "thresholds": {"dark": dark, "bright": bright},
             "lux_samples": len(self._lux_history),
