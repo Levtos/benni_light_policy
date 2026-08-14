@@ -340,6 +340,8 @@ class LightPolicyCoordinator:
             state.state,
             self._state_timestamp(state),
             startup_started_at,
+            attributes=state.attributes,
+            source_key=entity_id,
         )
 
     def _core_state_ready(self) -> bool:

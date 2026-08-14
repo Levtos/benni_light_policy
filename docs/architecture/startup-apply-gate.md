@@ -27,10 +27,15 @@ consumers have been inventoried and a rollback path is documented.
 After the canonical Core-State gate is ready, Light Policy waits for one fresh
 Lux sample before it permits the first post-start apply. A sample is fresh only
 when its state is numeric, finite, non-negative, not `unknown`/`unavailable`,
-not the known reconnect fallback `1 lx`, and its `last_reported` timestamp (with
-`last_updated`/`last_changed` compatibility fallbacks) is later than the
-Core-State `startup_started_at` reference. A value from before that reference is
-diagnosed as stale and cannot complete recovery.
+and its `last_reported` timestamp (with `last_updated`/`last_changed`
+compatibility fallbacks) is later than the Core-State `startup_started_at`
+reference. A value from before that reference is diagnosed as stale and cannot
+complete recovery. Exactly `1 lx` additionally requires the canonical Lux
+contract to explicitly report `available=true`, `fresh=true`,
+`atomic_quality=ok`, `fail_safe_active=false`, `degraded=false`, and the
+configured `lux_source` as available; missing or fallback/degraded provenance is
+blocked conservatively. Other valid numeric values retain the existing
+post-start behavior.
 
 While this sample is missing, the complete plan remains visible but carries the
 consumer-local `startup_lux_block`. The first sample that satisfies both
