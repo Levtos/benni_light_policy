@@ -98,6 +98,8 @@ PRESENCE_SIM_PHASES: Final = frozenset(
 # Eingangs-Wertebereiche (konsumiert aus benni_context / benni_core_*)
 # --------------------------------------------------------------------------- #
 BIO_SLEEP: Final = "sleep"
+BIO_PROVISIONAL_SLEEP: Final = "provisional_sleep"
+BIO_SLEEP_CONTEXTS: Final = frozenset({BIO_PROVISIONAL_SLEEP, BIO_SLEEP})
 BIO_WAKING: Final = "waking"
 BIO_AWAKE: Final = "awake"
 

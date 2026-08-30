@@ -24,7 +24,7 @@ from .const import (
     ACTIVITY_PRESET_DRIVING,
     ACTIVITY_PRIVATE_TIME,
     ACTIVITY_WORK_HOME,
-    BIO_SLEEP,
+    BIO_SLEEP_CONTEXTS,
     BIO_WAKING,
     CALENDAR_BIRTHDAY,
     COLOR_TEMP_WAKING,
@@ -400,12 +400,12 @@ def _eval_waking(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | No
 
 
 def _eval_sleep_off(ctx: Context, gate: bool, profile: dict[str, int]) -> Plan | None:
-    if ctx.bio_state != BIO_SLEEP:
+    if ctx.bio_state not in BIO_SLEEP_CONTEXTS:
         return None
     return Plan(
         mode=MODE_IDLE, preset_enum=MODE_IDLE, brightness=0, color_temp=None,
         apply_kind=APPLY_OFF, targets=[], exclusive_off=[GROUP_ALL],
-        lux_gate_on=gate, reason="hard_off: bio=sleep",
+        lux_gate_on=gate, reason=f"hard_off: bio={ctx.bio_state}",
     )
 
 
