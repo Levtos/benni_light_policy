@@ -1,6 +1,10 @@
 # Fahrplan — benni_light_policy
 
-**Stand:** 2026-06-08. Teil der koordinierten `benni_*`-Überarbeitung (Abstimmung der Integrationen untereinander).
+**Stand:** 2026-08-30. Teil der koordinierten `benni_*`-Überarbeitung (Abstimmung der Integrationen untereinander).
+
+Issue #59 erweitert den bestehenden terminalen Sleep-Hard-Off additiv auf
+`provisional_sleep`. TV-/Entertainment-Activity bleibt tatsächliche Activity,
+überstimmt aber weder PS noch S. Es wurde kein zweiter Apply-Pfad eingeführt.
 
 ## Rolle in der abgestimmten Welt
 **Licht-Orchestrator.** Entscheidet *wann welcher Look* gilt (Profil × Kontext × Tagesphase × Theme × feste Modi) und sendet einen **Look-Ref + Brightness-Override** an `benni_scene_presets`. Verwaltet **keine** Szenen/Lampen selbst (das macht scene_presets). Diese Trennung ist Voraussetzung fürs Eltern-System.

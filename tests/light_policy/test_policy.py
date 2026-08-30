@@ -151,6 +151,22 @@ def test_sleep_hard_off():
     assert p.exclusive_off == [C.GROUP_ALL]
 
 
+def test_issue59_provisional_sleep_uses_the_same_hard_off_contract():
+    p = _decide(
+        _ctx(
+            bio_state=C.BIO_PROVISIONAL_SLEEP,
+            activity_state="entertainment",
+            entertainment_stable=True,
+            media_context="tv",
+            media_device="tv",
+        )
+    )
+    assert p.mode == C.MODE_IDLE
+    assert p.apply_kind == P.APPLY_OFF
+    assert p.exclusive_off == [C.GROUP_ALL]
+    assert p.reason == "hard_off: bio=provisional_sleep"
+
+
 def test_lux_gate_off_hard_off():
     p = _decide(_ctx(bio_state=C.BIO_AWAKE, activity_state=C.ACTIVITY_PRIVATE_TIME), lux_gate_on=False)
     assert p.mode == C.MODE_IDLE

@@ -4,7 +4,7 @@ apply_now:
 
 set_manual_off:
   name: Set manual-off hold
-  description: Block apply (no on/off) until the hold is cleared or bio-state goes sleep→awake.
+  description: Block apply (no on/off) until the hold is cleared or bio-state leaves a sleep context for awake.
 
 clear_manual_off:
   name: Clear manual-off hold

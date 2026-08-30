@@ -38,7 +38,7 @@ except Exception:  # pragma: no cover
 from . import areas, policy
 from .const import (
     BIO_AWAKE,
-    BIO_SLEEP,
+    BIO_SLEEP_CONTEXTS,
     BRIGHTNESS_CHANGE_TRANSITION_SECONDS,
     CONF_ACTIVITY_STATE,
     CONF_APPLY_ENABLED,
@@ -605,8 +605,8 @@ class LightPolicyCoordinator:
         )
         self._prev_lux_gate = gate
 
-        # R9-Reset: Manual-Off löst sich automatisch bei Bio-Übergang sleep → awake.
-        if self._prev_bio == BIO_SLEEP and ctx.bio_state == BIO_AWAKE and self._manual_off:
+        # Issue #59: PS und S sind derselbe Consumer-Schlafkontext.
+        if self._prev_bio in BIO_SLEEP_CONTEXTS and ctx.bio_state == BIO_AWAKE and self._manual_off:
             self._manual_off = False
         self._prev_bio = ctx.bio_state
 
